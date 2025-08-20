@@ -1,0 +1,8 @@
+﻿node_modules/
+dist/
+*.log
+R-portable/
+jre/
+shiny-app/data/
+.DS_Store
+Thumbs.db

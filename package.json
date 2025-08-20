@@ -1,0 +1,58 @@
+{
+  "name": "octoclario",
+  "version": "1.0.3",
+  "description": "OctoClario: Native R Shiny Desktop App",
+  "author": "Onurcan Sezginer",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder"
+  },
+  "build": {
+    "productName": "OctoClario",
+    "appId": "com.octoclario.desktop",
+    "icon": "build/icon.ico",
+    "files": [
+      "**/*",
+      "!dist",
+      "!node_modules/*/{test,__tests__}/**",
+      "!R-portable/**",
+      "!shiny-app/**",
+      "!run-shiny.R"
+    ],
+    "extraResources": [
+      { "from": "R-portable/", "to": "R-portable/" },
+      { "from": "shiny-app/", "to": "shiny-app/" },
+      { "from": "run-shiny.R", "to": "run-shiny.R" },
+      { "from": "jre/", "to": "jre/" }
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "allowElevation": true,
+      "deleteAppDataOnUninstall": true,       
+      "uninstallerIcon": "build/icon.ico",
+      "include": "build/uninstaller.nsh"
+    },
+
+
+    "publish": [{ "provider": "generic", "url": "https://YOUR-DOMAIN/updates/" }]
+
+
+  },
+  "devDependencies": {
+    "electron": "^27.1.0",
+    "electron-builder": "^24.13.1"
+  },
+  "dependencies": {
+    "electron-updater": "^6.6.2",
+    "tree-kill": "^1.2.2",
+    "save": "^2.9.0"
+  }
+}

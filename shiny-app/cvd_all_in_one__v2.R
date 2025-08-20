@@ -1,0 +1,534 @@
+
+'%!in%' <- function(x,y)!('%in%'(x,y))
+cvd_all_in_one__v2 <- function(input_dir){
+  ##early errors
+  if (length(list.files(path = input_dir, pattern = "Quantification Cq Results", full.names = TRUE)) < 1) {
+    return("Missing File: Quantification Cq Results.")
+  } else if (length(list.files(path = input_dir, pattern = "Quantification Cq Results", full.names = TRUE)) > 1) {
+    return("Error! Multiple Results Located in Input Directory")
+  }
+  
+  
+  ##read data
+  ##add if exist clause for checking weather the data exists in the first place, if it doesn't exist create an empty data frame of the same name 
+  ##on the analysis part, if the data frame is empty, the loop must be skipped
+  ## for pai and apoe, a line of if clause must be added before the analysis
+  
+  well_info <- as.data.frame(read.table(file = list.files(path = input_dir, pattern = "Quantification Cq Results", full.names = TRUE), header = TRUE, sep = ";", dec = ","))
+  well_info <- well_info[,c("Well", "Target", "Fluor", "Sample", "Content")]
+  well_info$Well <- gsub("([A-Z])0([1-9])", "\\1\\2", well_info$Well)
+  if (length(list.files(path = input_dir, pattern = "Melt Curve Derivative Results_Cy5", full.names = TRUE)) > 0) {
+    cy5_data <- as.data.frame(read.table(list.files(path = input_dir, pattern = "Melt Curve Derivative Results_Cy5", full.names = TRUE), header = TRUE, sep = ";", dec = ","))
+  }
+  if (length(list.files(path = input_dir, pattern = "Melt Curve Derivative Results_FAM", full.names = TRUE)) > 0) {
+    fam_data <- as.data.frame(read.table(file = list.files(path = input_dir, pattern = "Melt Curve Derivative Results_FAM", full.names = TRUE), header = TRUE, sep = ";", dec = ","))
+  }
+  if (length(list.files(path = input_dir, pattern = "Melt Curve Derivative Results_HEX", full.names = TRUE)) > 0) {
+    hex_data <- as.data.frame(read.table(file = list.files(path = input_dir, pattern = "Melt Curve Derivative Results_HEX", full.names = TRUE), header = TRUE, sep = ";", dec = ","))
+  }
+  if (length(list.files(path = input_dir, pattern = "Melt Curve Derivative Results_ROX", full.names = TRUE)) > 0) {
+    rox_data <- as.data.frame(read.table(list.files(path = input_dir, pattern = "Melt Curve Derivative Results_ROX", full.names = TRUE), header = TRUE, sep = ";", dec = ","))
+  }
+  
+  
+  
+  
+  ##parse data into parameters
+  
+  pai_data <- as.data.frame(cy5_data[,c("Temperature",well_info[grep(pattern = "\\bPAI\\b", x = well_info$Target, ignore.case = TRUE),"Well"])])
+  fv_data <- as.data.frame(fam_data[,c("Temperature", well_info[grep(pattern = "^FV$", x = well_info$Target, ignore.case = TRUE), "Well"])])
+  fii_data <- as.data.frame(hex_data[,c("Temperature", well_info[grep(pattern = "\\bFII\\b", x = well_info$Target, ignore.case = TRUE), "Well"])])
+  a1298_data <- as.data.frame(cy5_data[,c("Temperature", well_info[grep(pattern = "1298", x = well_info$Target), "Well"])])
+  c677_data <- as.data.frame(rox_data[,c("Temperature", well_info[grep(pattern = "677", x = well_info$Target), "Well"])])
+  fxiii_data <- as.data.frame(rox_data[,c("Temperature", well_info[grep(pattern = "\\bfx", x = well_info$Target, ignore.case = TRUE), "Well"])])
+  fgb_data <- as.data.frame(rox_data[,c("Temperature", well_info[grep(pattern = "\\bfgb\\b", x = well_info$Target, ignore.case = TRUE), "Well"])])
+  hpai_data <- as.data.frame(cy5_data[,c("Temperature", well_info[grep(pattern = "\\bHPAI\\b", well_info$Target, ignore.case = TRUE), "Well"])])
+  fvcamb_data <- as.data.frame(cy5_data[,c("Temperature", well_info[grep(pattern = "\\bfv-\\b", well_info$Target, ignore.case = TRUE), "Well"])])
+  apob_data <- as.data.frame(rox_data[,c("Temperature", well_info[grep(pattern = "\\bapob\\b", well_info$Target, ignore.case = TRUE), "Well"])])
+  ace_data <- as.data.frame(cy5_data[,c("Temperature", well_info[grep(pattern = "ACE", well_info$Target, ignore.case = TRUE), "Well"])])
+  lta_data <- as.data.frame(rox_data[,c("Temperature", well_info[grep(pattern = "LTA", well_info$Target, ignore.case = TRUE), "Well"])])
+  apoe1_data <- as.data.frame(rox_data[,c("Temperature", well_info[grep(pattern = "apoe1", well_info$Target, ignore.case = TRUE), "Well"])])
+  apoe2_data <- as.data.frame(cy5_data[,c("Temperature", well_info[grep(pattern = "apoe2", well_info$Target, ignore.case = TRUE), "Well"])])
+  
+  data_list_11 <- list(fv_data, fii_data,  c677_data, a1298_data, fxiii_data, fgb_data, hpai_data,  apob_data,fvcamb_data, ace_data, lta_data)
+  names(data_list_11) <- c("FV-LEI","FII", "C677T", "A1298C", "FXIII", "FGB", "HPAI","APOB",  "FV CAMB", "ACE", "LTA")
+  data_list_apoe <- list(apoe1_data, apoe2_data)
+  names(data_list_apoe) <- list("APOE1", "APOE2")
+  data_list_graph <- list(fv_data, fii_data,  c677_data, a1298_data, fxiii_data, pai_data, fgb_data, hpai_data,  apob_data,fvcamb_data, ace_data, lta_data, apoe1_data, apoe2_data)
+  names(data_list_graph) <- c("FV-LEI","FII", "C677T", "A1298C", "FXIII", "PAI", "FGB", "HPAI","APOB",  "FV CAMB", "ACE", "LTA", "APOE1", "APOE2")
+  
+  ##parameter melting points
+  
+  fv_melt <- c(64,68)
+  fii_melt <- c(66,70)
+  c677_melt <- c(63,69)
+  a1298_melt <- c(63,70)
+  fxiii_melt <- c(66,71)
+  fgb_melt <- c(50,57)
+  hpai_melt <- c(63,67)
+  apob_melt <- c(62,67)
+  fvcamb_melt <- c(64,67)
+  lta_melt <- c(63,70)
+  ace_melt <- c(62,67)
+  apoe1_melt <- c(55,67)
+  apoe2_melt <- c(64,71)
+  
+  melt_for_11 <- c(mean(fv_melt), mean(fii_melt), mean(c677_melt), mean(a1298_melt), mean(fxiii_melt), mean(fgb_melt), mean(hpai_melt), mean(apob_melt), mean(fvcamb_melt),  mean(ace_melt),mean(lta_melt))
+  names(melt_for_11) <- c("FV-LEI","FII", "C677T", "A1298C", "FXIII", "FGB", "HPAI",  "APOB","FV CAMB", "ACE", "LTA")
+  melt_for_apoe <- c(mean(apoe1_melt), mean(apoe2_melt))
+  names(melt_for_apoe) <- list("APOE1", "APOE2")
+  melt_list_cvd <- list(fv_melt, fii_melt, c677_melt, a1298_melt, fxiii_melt, fgb_melt, hpai_melt, apob_melt, fvcamb_melt, ace_melt, lta_melt, apoe1_melt, apoe2_melt)
+  names(melt_list_cvd) <- c("FV-LEI","FII", "C677T", "A1298C", "FXIII", "FGB", "HPAI",  "APOB","FV CAMB", "ACE", "LTA", "APOE1", "APOE2")
+  
+  ## well information data frames and lists
+  
+  well_info_pai <- well_info[grep(pattern = "\\bPAI\\b", x = well_info$Target, ignore.case = TRUE),]
+  well_info_fv <- well_info[grep(pattern = "^FV$", x = well_info$Target, ignore.case = TRUE),]
+  well_info_fii <- well_info[grep(pattern = "\\bFII\\b", x = well_info$Target, ignore.case = TRUE),]
+  well_info_1298 <- well_info[grep(pattern = "1298", x = well_info$Target),]
+  well_info_677 <- well_info[grep(pattern = "677", x = well_info$Target),]
+  well_info_fxiii <- well_info[grep(pattern = "\\bfx", x = well_info$Target, ignore.case = TRUE),]
+  well_info_fgb <- well_info[grep(pattern = "\\bfgb\\b", x = well_info$Target, ignore.case = TRUE),]
+  well_info_hpai <-well_info[grep(pattern = "\\bHPAI\\b", well_info$Target, ignore.case = TRUE),]
+  well_info_fvcamb <-well_info[grep(pattern = "\\bfv-\\b", well_info$Target, ignore.case = TRUE),]
+  well_info_apob <-well_info[grep(pattern = "\\bapob\\b", well_info$Target, ignore.case = TRUE),]
+  well_info_ace <-well_info[grep(pattern = "ACE", well_info$Target, ignore.case = TRUE),]
+  well_info_lta <-well_info[grep(pattern = "LTA", well_info$Target, ignore.case = TRUE),]
+  well_info_apoe1 <-well_info[grep(pattern = "apoe1", well_info$Target, ignore.case = TRUE),]
+  well_info_apoe2 <-well_info[grep(pattern = "apoe2", well_info$Target, ignore.case = TRUE),]
+  
+  well_list_11 <- list(well_info_fv, well_info_fii,  well_info_677, well_info_1298, well_info_fxiii, well_info_fgb, well_info_hpai,  well_info_apob, well_info_fvcamb, well_info_ace, well_info_lta)
+  names(well_list_11) <- c("FV-LEI","FII", "C677T", "A1298C", "FXIII", "FGB", "HPAI",  "APOB","FV CAMB", "ACE", "LTA")
+  well_list_apoe <- list(well_info_apoe1, well_info_apoe2)
+  names(well_list_apoe) <- list("APOE1", "APOE2")
+  
+  ##result tables
+  result_tb_list_11 <- list()
+  result_tb_names <- c()
+  for (i in 1:11) {
+    if (ncol(data_list_11[[i]]) < 2) {
+      result_table <- data.frame()
+      next
+    }
+    result_table <- data.frame(row.names = colnames(data_list_11[[i]])[2:ncol(data_list_11[[i]])], min_dips = c(2:ncol(data_list_11[[i]])), max_dips = c(2:ncol(data_list_11[[i]])), peak_1 = c(2:ncol(data_list_11[[i]])), peak_2 = c(2:ncol(data_list_11[[i]])), Tm = c(2:ncol(data_list_11[[i]])), patient = c(2:ncol(data_list_11[[i]])), genotype = c(2:ncol(data_list_11[[i]])))
+    result_tb_list_11 <- c(result_tb_list_11, list(result_table))
+    result_tb_names <- c(result_tb_names, names(well_list_11[i]))
+  }
+  names(result_tb_list_11) <- result_tb_names
+  well_list_11 <- well_list_11[result_tb_names]
+  data_list_11 <- data_list_11[result_tb_names]
+  ##for pai
+  reference_pai_genotype <- "4G-5G"
+  reference_pai_well <- well_info_pai$Well[well_info_pai$Content == "Pos Ctrl"]
+  
+  if (ncol(pai_data) > 1) {
+    pai_data <- as.data.frame(pai_data)
+    pai_data_graph <- pai_data
+    pai_data <- pai_data[pai_data[,1] < 78,]
+    pai_data <- pai_data[pai_data[,1] > 60,]
+    all_peak <- c()
+    min_dips <- c()
+    max_dips <- c()
+    result_tb_pai <- data.frame(row.names = colnames(pai_data)[2:ncol(pai_data)], min_dips = c(2:ncol(pai_data)), max_dips = c(2:ncol(pai_data)), peak_1 = c(2:ncol(pai_data)), Tm = c(2:ncol(pai_data)), patient = c(2:ncol(pai_data)), genotype = c(2:ncol(pai_data)))
+    for (i in 1:nrow(result_tb_pai)) {
+      for (j in 1:nrow(well_info_pai)) {
+        if (rownames(result_tb_pai)[i] == well_info_pai$Well[j]) {
+          result_tb_pai$patient[i] <- well_info_pai$Sample[j]
+        }
+      }
+    }
+    for (i in 2:ncol(pai_data)) {
+      if (max(pai_data[,i]) < 50) {
+        min_dips <- c(min_dips, NA)
+        max_dips <- c(max_dips, NA)
+      } else {
+        min_dips <- c(min_dips, min(pai_data[which(pai_data[,i] > max(pai_data[,i]/2)),1]))
+        max_dips <- c(max_dips, max(pai_data[which(pai_data[,i] > max(pai_data[,i]/2)),1]))
+      }
+      for (j in 1:nrow(pai_data)) {
+        if (j > 1 && j < nrow(pai_data)) {
+          if (pai_data[j+1,i] < pai_data[j,i] && pai_data[j-1,i] < pai_data[j,i]) {
+            all_peak <- c(all_peak,pai_data[j,i])
+          }
+        }
+      }
+      true_peak_rfu <- sort(all_peak, decreasing = TRUE)
+      #result_tb_pai$peak_1[i-1] <- true_peak_rfu[1]
+      all_peak <- c()
+      true_peak_rfu <- c()
+    }
+    result_tb_pai$min_dips <- min_dips
+    result_tb_pai$max_dips <- max_dips
+    for (i in 1:nrow(result_tb_pai)) {
+      if ("NTC" %in% well_info_pai$Content[which(well_info_pai$Well %in% rownames(result_tb_pai)[i])]){
+        result_tb_pai$genotype[i] <- "NTC"
+      } 
+      if ("Pos Ctrl" %in% well_info_pai$Content[which(well_info_pai$Well %in% rownames(result_tb_pai)[i])]){
+        result_tb_pai$genotype[i] <- "Pos Ctrl"
+      }
+      if (is.na(result_tb_pai$min_dips[i]) && is.na(result_tb_pai$max_dips[i])) {
+        result_tb_pai$peak_1[i] <- NA
+      }
+    }
+    ##get genotype
+    
+    for (i in 1:nrow(result_tb_pai)) {
+      if ("NTC" %in% result_tb_pai$genotype[i]){
+        next
+      }
+      if ("Pos Ctrl" %in% result_tb_pai$genotype[i]){
+        next
+      }
+      if (is.na(result_tb_pai$peak_1[i])){
+        result_tb_pai$genotype[i] <- "No Peaks Detected within the Boundaries."
+        next
+      }
+      if (result_tb_pai$min_dips[i] < result_tb_pai[reference_pai_well,1]+1 && result_tb_pai$max_dips[i] > result_tb_pai[reference_pai_well,2]-1) {
+        result_tb_pai$genotype[i] <- "4G-5G"
+      } else if (result_tb_pai$min_dips[i] < result_tb_pai[reference_pai_well,1]+1 && result_tb_pai$max_dips[i] < result_tb_pai[reference_pai_well,2]-1){
+        result_tb_pai$genotype[i] <- "5G-5G"
+      } else if (result_tb_pai$min_dips[i] > result_tb_pai[reference_pai_well,1]+1 && result_tb_pai$max_dips[i] > result_tb_pai[reference_pai_well,2]-1){
+        result_tb_pai$genotype[i] <- "4G-4G"
+      }
+      
+    }    
+    
+    result_tb_pai$Parameter <- c(rep(x = "PAI", nrow(result_tb_pai)))
+    result_tb_pai <- cbind(rownames(result_tb_pai),result_tb_pai)
+    result_tb_pai <- result_tb_pai[,c(1,6,8,7,4)]
+    colnames(result_tb_pai) <- c("Well" ,"Sample Name", "Parameter", "Genotype", "peak_1")
+  } else {
+    result_tb_pai <- data.frame()
+  }
+  ##for two peak 11 parameter
+  if(nrow(list2DF(result_tb_list_11)) != 0){
+    for (i in 1:length(result_tb_list_11)) {
+      for (j in 1:nrow(result_tb_list_11[[i]])) {
+        for (k in 1:nrow(well_list_11[[i]])) {
+          if(rownames(result_tb_list_11[[i]])[j] == well_list_11[[i]]$Well[k]){
+            result_tb_list_11[[i]]$patient[j] <- well_list_11[[i]]$Sample[k]
+          }
+        }
+      }
+    }
+    
+    for (i in 1:length(data_list_11)) {
+      all_peak <- c()
+      min_dips <- c()
+      max_dips <- c()
+      true_peak_rfu <- c()
+      melt_range <- melt_list_cvd[[names(data_list_11)[i]]]
+      lower_bound <- melt_range[1] - 3
+      upper_bound <- melt_range[2] + 3
+      for (j in 2:ncol(data_list_11[[i]])) {
+        if (max(data_list_11[[i]][,j]) < 50) {
+          min_dips <- c(min_dips, NA)
+          max_dips <- c(max_dips, NA)
+        } else {
+          min_dips <- c(min_dips, min(data_list_11[[i]][which(data_list_11[[i]][,j] > max(data_list_11[[i]][,j]/2)),1]))
+          max_dips <- c(max_dips, max(data_list_11[[i]][which(data_list_11[[i]][,j] > max(data_list_11[[i]][,j]/2)),1]))
+        }
+        for (k in 2:nrow(data_list_11[[i]]-1)) {
+          if(max(data_list_11[[i]][,j]) > 50){
+            if(data_list_11[[i]][k,1] > lower_bound && data_list_11[[i]][k,1] < upper_bound){
+              if (data_list_11[[i]][k+1,j] < data_list_11[[i]][k,j] && data_list_11[[i]][k-1,j] < data_list_11[[i]][k,j]) {
+                all_peak <- c(all_peak, data_list_11[[i]][k,j])
+              }
+            } 
+          } else {
+            all_peak <- c(all_peak, 0)
+          }
+        }
+        
+        true_peak_rfu <- sort(all_peak, decreasing = TRUE)
+        if (length(true_peak_rfu) == 0) {
+          result_tb_list_11[[i]]$peak_1[j-1] <- NA
+        } else {
+          result_tb_list_11[[i]]$peak_1[j-1] <- true_peak_rfu[1]
+        }
+        
+        if (length(true_peak_rfu) > 1) {
+          if (true_peak_rfu[2] > true_peak_rfu[1]/3) {
+            result_tb_list_11[[i]]$peak_2[j-1] <- true_peak_rfu[2]
+          }
+          else {
+            result_tb_list_11[[i]]$peak_2[j-1] <- NA
+          }
+        } else {
+          result_tb_list_11[[i]]$peak_2[j-1] <- NA
+        }
+        all_peak <- c()
+        true_peak_rfu <- c()
+      }
+      result_tb_list_11[[i]]$min_dips <- min_dips
+      result_tb_list_11[[i]]$max_dips <- max_dips
+    }
+    for (i in 1:length(result_tb_list_11)) {
+      tm <- (melt_for_11[[names(result_tb_list_11)[i]]])
+      for (j in 1:nrow(result_tb_list_11[[i]])) {
+        if ("NTC" %in% well_info$Content[which(well_info$Well %in% rownames(result_tb_list_11[[i]])[j])]) {
+          result_tb_list_11[[i]]$genotype[j] <- "NTC"
+          next
+        }
+        if ("Pos Ctrl" %in% well_info$Content[which(well_info$Well %in% rownames(result_tb_list_11[[i]])[j])]){
+          result_tb_list_11[[i]]$genotype[j] <- "Pos Ctrl"
+          next
+        }
+        if (is.na(result_tb_list_11[[i]]$min_dips[j]) && is.na(result_tb_list_11[[i]]$max_dips[j])) {
+          result_tb_list_11[[i]]$Tm[j] <- NA
+          next
+        }
+        if (is.na(result_tb_list_11[[i]]$peak_2[j]) && names(result_tb_list_11)[i] %!in% c("HPAI", "FV-LEI", "FII")) {
+          
+          result_tb_list_11[[i]]$Tm[j] <- as.numeric(data_list_11[[names(result_tb_list_11[i])]][which(data_list_11[[names(result_tb_list_11[i])]][,j+1] %in% result_tb_list_11[[i]]$peak_1),1])
+          
+          
+        } else if (is.na(result_tb_list_11[[i]]$peak_2[j]) == TRUE && names(result_tb_list_11)[i] == "HPAI"){
+          
+          if(result_tb_list_11[[i]]$min_dips[j] < hpai_melt[1] && result_tb_list_11[[i]]$max_dips[j] > hpai_melt[2]) {
+            
+            result_tb_list_11[[i]]$genotype[j] <- "Heterozygous"
+            
+          } else {
+            
+            result_tb_list_11[[i]]$Tm[j] <- data_list_11[[names(result_tb_list_11[i])]][which(data_list_11[[names(result_tb_list_11[i])]][,j+1] %in% result_tb_list_11[[i]]$peak_1),1]
+            
+          }
+          
+        } else if(is.na(result_tb_list_11[[i]]$peak_2[j]) == TRUE && names(result_tb_list_11)[i] == "FV-LEI"){
+          
+          if(result_tb_list_11[[i]]$min_dips[j] < fv_melt[1] && result_tb_list_11[[i]]$max_dips[j] > fv_melt[2]) {
+            
+            result_tb_list_11[[i]]$genotype[j] <- "Heterozygous"
+            
+          } else {
+            
+            result_tb_list_11[[i]]$Tm[j] <- data_list_11[[names(result_tb_list_11[i])]][which(data_list_11[[names(result_tb_list_11[i])]][,j+1] %in% result_tb_list_11[[i]]$peak_1),1]
+            
+          }
+        } else if(is.na(result_tb_list_11[[i]]$peak_2[j]) == TRUE && names(result_tb_list_11)[i] == "FII"){
+          
+          if(result_tb_list_11[[i]]$min_dips[j] < fii_melt[1]+1 && result_tb_list_11[[i]]$max_dips[j] > fii_melt[2]) {
+            
+            result_tb_list_11[[i]]$genotype[j] <- "Heterozygous"
+            
+          } else {
+            
+            result_tb_list_11[[i]]$Tm[j] <- data_list_11[[names(result_tb_list_11[i])]][which(data_list_11[[names(result_tb_list_11[i])]][,j+1] %in% result_tb_list_11[[i]]$peak_1),1]
+            
+          }
+        }
+        else {
+          result_tb_list_11[[i]]$genotype[j] <- "Heterozygous"
+        }
+      }
+      for (j in 1:nrow(result_tb_list_11[[i]])) {
+        if (is.na(result_tb_list_11[[i]]$Tm[j])) {
+          result_tb_list_11[[i]]$genotype[j] <- "No Peaks Detected Within the Boundaries."
+        } else if ("NTC" %in% well_info$Content[which(well_info$Well %in% rownames(result_tb_list_11[[i]])[j])]){
+          result_tb_list_11[[i]]$genotype[j] <- "NTC"
+        } else if ("Pos Ctrl" %in% well_info$Content[which(well_info$Well %in% rownames(result_tb_list_11[[i]])[j])]){
+          result_tb_list_11[[i]]$genotype[j] <- "Pos Ctrl"
+        } else if (result_tb_list_11[[i]]$genotype[j] == "Heterozygous" && names(result_tb_list_11[i]) == "ACE"){
+          result_tb_list_11[[i]]$genotype[j] <- "INS-DEL"
+        } else if (result_tb_list_11[[i]]$Tm[j] > tm && names(result_tb_list_11[i]) == "ACE"){
+          result_tb_list_11[[i]]$genotype[j] <- "DEL-DEL"
+        } else if (result_tb_list_11[[i]]$Tm[j] < tm && names(result_tb_list_11[i]) == "ACE"){
+          result_tb_list_11[[i]]$genotype[j] <- "INS-INS"
+        } else if ( result_tb_list_11[[i]]$genotype[j] == "Heterozygous"){
+          result_tb_list_11[[i]]$genotype[j] <- "Heterozygous"
+        } else if (result_tb_list_11[[i]]$Tm[j] > tm && names(result_tb_list_11[i]) != "A1298C"){
+          result_tb_list_11[[i]]$genotype[j] <- "Wild Type"
+        } else if (result_tb_list_11[[i]]$Tm[j] < tm && names(result_tb_list_11[i]) != "A1298C"){
+          result_tb_list_11[[i]]$genotype[j] <- "Homozygous Mutant"
+        } else if (result_tb_list_11[[i]]$Tm[j] > tm && names(result_tb_list_11[i]) == "A1298C"){
+          result_tb_list_11[[i]]$genotype[j] <- "Homozygous Mutant"
+        } else if (result_tb_list_11[[i]]$Tm[j] < tm && names(result_tb_list_11[i]) == "A1298C"){
+          result_tb_list_11[[i]]$genotype[j] <- "Wild Type"
+        }
+        
+      }
+      
+    }
+  } else {
+    result_tb_list_11 <- list()
+  }
+  
+  ##for apoe
+  if(ncol(data_list_apoe[[1]]) >1 && ncol(data_list_apoe[[1]]) == ncol(data_list_apoe[[2]])){
+    result_tb_list_apoe <- list()
+    result_tb_names_apoe <- c()
+    for (i in 1:2) {
+      if (ncol(data_list_apoe[[i]]) < 2) {
+        result_table_apoe <- data.frame()
+        next
+      }
+      result_table_apoe <- data.frame(row.names = colnames(data_list_apoe[[i]])[2:ncol(data_list_apoe[[i]])], min_dips = c(2:ncol(data_list_apoe[[i]])), max_dips = c(2:ncol(data_list_apoe[[i]])), peak_1 = c(2:ncol(data_list_apoe[[i]])), peak_2 = c(2:ncol(data_list_apoe[[i]])), Tm = c(2:ncol(data_list_apoe[[i]])), patient = c(2:ncol(data_list_apoe[[i]])), genotype = c(2:ncol(data_list_apoe[[i]])))
+      result_tb_list_apoe <- c(result_tb_list_apoe, list(result_table_apoe))
+      result_tb_names_apoe <- c(result_tb_names_apoe, names(well_list_apoe[i]))
+    }
+    names(result_tb_list_apoe) <- result_tb_names_apoe
+    well_list_apoe <- well_list_apoe[result_tb_names_apoe]
+    data_list_apoe <- data_list_apoe[result_tb_names_apoe]
+    for (i in 1:length(result_tb_list_apoe)) {
+      for (j in 1:nrow(result_tb_list_apoe[[i]])) {
+        for (k in 1:nrow(well_list_apoe[[i]])) {
+          if(rownames(result_tb_list_apoe[[i]])[j] == well_list_apoe[[i]]$Well[k]){
+            result_tb_list_apoe[[i]]$patient[j] <- well_list_apoe[[i]]$Sample[k]
+          }
+        }
+      }
+    }
+    
+    for (i in 1:length(data_list_apoe)) {
+      all_peak <- c()
+      min_dips <- c()
+      max_dips <- c()
+      true_peak_rfu <- c()
+      melt_range <- melt_list_cvd[[names(data_list_apoe)[i]]]
+      lower_bound <- melt_range[1] - 3
+      upper_bound <- melt_range[2] + 3
+      for (j in 2:ncol(data_list_apoe[[i]])) {
+        if (max(data_list_apoe[[i]][,j]) < 50) {
+          min_dips <- c(min_dips, NA)
+          max_dips <- c(max_dips, NA)
+        } else {
+          min_dips <- c(min_dips, min(data_list_apoe[[i]][which(data_list_apoe[[i]][,j] > max(data_list_apoe[[i]][,j]/2)),1]))
+          max_dips <- c(max_dips, max(data_list_apoe[[i]][which(data_list_apoe[[i]][,j] > max(data_list_apoe[[i]][,j]/2)),1]))
+        }
+        for (k in 1:nrow(data_list_apoe[[i]])) {
+          if(k > 1 && k < nrow(data_list_apoe[[i]])){
+            if(data_list_apoe[[i]][k,1] > lower_bound && data_list_apoe[[i]][k,1] < upper_bound){
+              if (data_list_apoe[[i]][k+1,j] < data_list_apoe[[i]][k,j] && data_list_apoe[[i]][k-1,j] < data_list_apoe[[i]][k,j]) {
+                all_peak <- c(all_peak, data_list_apoe[[i]][k,j])
+              }
+            }
+          }
+        }
+        true_peak_rfu <- sort(all_peak, decreasing = TRUE)
+        
+        if (length(true_peak_rfu) != 0) {
+          result_tb_list_apoe[[i]]$peak_1[j-1] <- true_peak_rfu[1]
+        }
+        if (length(true_peak_rfu) > 1) {
+          if (true_peak_rfu[2] > true_peak_rfu[1]/3) {
+            result_tb_list_apoe[[i]]$peak_2[j-1] <- true_peak_rfu[2]
+          } else {
+            result_tb_list_apoe[[i]]$peak_2[j-1] <- NA
+          }
+        } else {
+          result_tb_list_apoe[[i]]$peak_2[j-1] <- NA
+        }
+        all_peak <- c()
+        true_peak_rfu <- c()
+      }
+      result_tb_list_apoe[[i]]$min_dips <- min_dips
+      result_tb_list_apoe[[i]]$max_dips <- max_dips
+    }
+    for (i in 1:length(result_tb_list_apoe)) {
+      tm <- mean(melt_for_apoe[names(result_tb_list_apoe[i])])
+      for (j in 1:nrow(result_tb_list_apoe[[i]])) {
+        if ("NTC" %in% well_info$Content[which(well_info$Well %in% rownames(result_tb_list_apoe[[i]])[j])]) {
+          result_tb_list_apoe[[i]]$genotype[j] <- "NTC"
+          next
+        }
+        if ("Pos Ctrl" %in% well_info$Content[which(well_info$Well %in% rownames(result_tb_list_apoe[[i]])[j])]) {
+          result_tb_list_apoe[[i]]$genotype[j] <- "Pos Ctrl"
+          next
+        }
+        if (is.na(result_tb_list_apoe[[i]]$min_dips[j]) && is.na(result_tb_list_apoe[[i]]$max_dips[j])) {
+          result_tb_list_apoe[[i]]$Tm[j] <- NA
+          next
+        }
+        if (is.na(result_tb_list_apoe[[i]]$peak_2[j])) {
+          result_tb_list_apoe[[i]]$Tm[j] <- data_list_apoe[[names(result_tb_list_apoe[i])]][which(data_list_apoe[[names(result_tb_list_apoe[i])]][,j+1] %in% result_tb_list_apoe[[i]]$peak_1),1]
+        } else {
+          result_tb_list_apoe[[i]]$genotype[j] <- "Heterozygous"
+        }
+      }
+      for (j in 1:nrow(result_tb_list_apoe[[i]])) {
+        if (is.na(result_tb_list_apoe[[i]]$Tm[j])) {
+          result_tb_list_apoe[[i]]$genotype[j] <- NA
+        } else if ("NTC" %in% well_info$Content[which(well_info$Well %in% rownames(result_tb_list_apoe[[i]])[j])]){
+          result_tb_list_apoe[[i]]$genotype[j] <- "NTC"
+        } else if("Pos Ctrl" %in% well_info$Content[which(well_info$Well %in% rownames(result_tb_list_apoe[[i]])[j])]){
+          result_tb_list_apoe[[i]]$genotype[j] <- "Pos Ctrl"
+        } else if ( result_tb_list_apoe[[i]]$genotype[j] == "Heterozygous"){
+          result_tb_list_apoe[[i]]$genotype[j] <- "Heterozygous"
+        } else if (result_tb_list_apoe[[i]]$Tm[j] > tm && names(result_tb_list_apoe[i]) != "APOE1"){
+          result_tb_list_apoe[[i]]$genotype[j] <- "Wild Type"
+        } else if (result_tb_list_apoe[[i]]$Tm[j] < tm && names(result_tb_list_apoe[i]) != "APOE1"){
+          result_tb_list_apoe[[i]]$genotype[j] <- "Homozygous Mutant"
+        } else if (result_tb_list_apoe[[i]]$Tm[j] > tm && names(result_tb_list_apoe[i]) == "APOE1"){
+          result_tb_list_apoe[[i]]$genotype[j] <- "Homozygous Mutant"
+        } else if (result_tb_list_apoe[[i]]$Tm[j] < tm && names(result_tb_list_apoe[i]) == "APOE1"){
+          result_tb_list_apoe[[i]]$genotype[j] <- "Wild Type"
+        }
+        
+      }
+    }
+    apoe1_table <- result_tb_list_apoe[[1]]
+    apoe1_table$Parameter <- "APOE1"
+    apoe1_table <- cbind(Well = rownames(apoe1_table), apoe1_table)
+    
+    apoe2_table <- result_tb_list_apoe[[2]]
+    apoe2_table$Parameter <- "APOE2"
+    apoe2_table <- cbind(Well = rownames(apoe2_table), apoe2_table)
+    
+    result_tb_list_apoe_final <- result_tb_list_apoe[[1]]
+    for(i in 1:nrow(result_tb_list_apoe[[1]])){
+      if (is.na(result_tb_list_apoe[[1]]$genotype[i]) || is.na(result_tb_list_apoe[[2]]$genotype[i])){
+        result_tb_list_apoe_final$genotype[i] <- "No Peaks Detected within the Boundaries."
+      }
+      if(result_tb_list_apoe[[1]]$genotype[i] == "Wild Type" && result_tb_list_apoe[[2]]$genotype[i] == "Homozygous Mutant"){
+        result_tb_list_apoe_final$genotype[i] <- "E2,E2"
+      } else if(result_tb_list_apoe[[1]]$genotype[i] == "Wild Type" && result_tb_list_apoe[[2]]$genotype[i] == "Wild Type"){
+        result_tb_list_apoe_final$genotype[i] <- "E3,E3"
+      } else if(result_tb_list_apoe[[1]]$genotype[i] == "Homozygous Mutant" && result_tb_list_apoe[[2]]$genotype[i] == "Wild Type"){
+        result_tb_list_apoe_final$genotype[i] <- "E4,E4"
+      } else if(result_tb_list_apoe[[1]]$genotype[i] == "Wild Type" && result_tb_list_apoe[[2]]$genotype[i] == "Heterozygous"){
+        result_tb_list_apoe_final$genotype[i] <- "E2,E3"
+      } else if(result_tb_list_apoe[[1]]$genotype[i] == "Heterozygous" && result_tb_list_apoe[[2]]$genotype[i] == "Heterozygous"){
+        result_tb_list_apoe_final$genotype[i] <- "E2,E4"
+      } else if(result_tb_list_apoe[[1]]$genotype[i] == "Heterozygous" && result_tb_list_apoe[[2]]$genotype[i] == "Wild Type"){
+        result_tb_list_apoe_final$genotype[i] <- "E3,E4"
+      } else if(result_tb_list_apoe[[1]]$genotype[i] == "NTC" && result_tb_list_apoe[[2]]$genotype[i] == "NTC"){
+        result_tb_list_apoe_final$genotype[i] <- "NTC"
+      } else {
+        result_tb_list_apoe_final$genotype[i] <- "Pos Ctrl"
+      }
+        
+      
+    }
+    result_tb_list_apoe_final$Parameter <- "APOE"
+    result_tb_list_apoe_final <- cbind(Well = rownames(result_tb_list_apoe_final), result_tb_list_apoe_final)
+    result_tb_list_apoe_final <- result_tb_list_apoe_final[,c(1,7,9,8)]
+    colnames(result_tb_list_apoe_final) <- c("Well", "Sample Name", "Parameter", "Genotype")
+    apoe_table_final <- list(APOE1 = apoe1_table, APOE2 = apoe2_table, APOE = result_tb_list_apoe_final)
+    
+  } else if (ncol(data_list_apoe[[1]]) >1 && ncol(data_list_apoe[[1]]) != ncol(data_list_apoe[[2]])){
+    apoe_table_final <- list(data.frame(), data.frame(), data.frame())
+    print("APOE genotypes cannot be calculated, please exclude the wells with only one of the APOE parameters were loaded.")
+  } else {
+    apoe_table_final <- list(data.frame(), data.frame(), data.frame())
+  }
+  
+  
+  
+  for (i in 1:length(result_tb_list_11)) {
+    result_tb_list_11[[i]]$Parameter <- c(rep(names(result_tb_list_11[i]), nrow(result_tb_list_11[[i]])))
+    result_tb_list_11[[i]] <- cbind(rownames(result_tb_list_11[[i]]), result_tb_list_11[[i]])
+    result_tb_list_11[[i]] <- result_tb_list_11[[i]][,c(1,7,9,8,4,5)]
+    colnames(result_tb_list_11[[i]]) <- c("Well", "Sample Name", "Parameter", "Genotype", "peak_1", "peak_2")
+  }
+  result_tb_cvd <- c(result_tb_list_11, list(result_tb_pai), apoe_table_final)
+  names(result_tb_cvd) <- c(names(result_tb_list_11), "PAI", "APOE1", "APOE2", "APOE")
+  for (i in 1:length(result_tb_list_11)) {
+    result_tb_list_11[[i]] <- result_tb_list_11[[i]][!is.na(result_tb_list_11[[i]]$Genotype),]
+  }
+  result_tb_cvd <- result_tb_cvd[sapply(result_tb_cvd, function(x) dim(x)[1]) > 0]
+  
+  return(list(result_tb_cvd,
+              data_list_graph))
+  
+}

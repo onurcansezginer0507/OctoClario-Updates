@@ -1,0 +1,5 @@
+git init
+git remote add origin https://github.com/onurcansezginer0507/OctoClario-Updates.git
+git add .
+git commit -m "init"
+git push -u origin main
