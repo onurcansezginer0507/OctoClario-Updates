@@ -1,3 +1,4 @@
+// main.js
 const { app, BrowserWindow, ipcMain, dialog, Menu } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
@@ -5,33 +6,33 @@ const http = require('http');
 const fs = require('fs');
 const net = require('net');
 
-// ⬇️ NEW: updater + tree-kill
+// ---- Updater + logging + tree-kill
 const { autoUpdater } = require('electron-updater');
 const treeKill = require('tree-kill');
+const log = require('electron-log'); // v5 works fine
 
-function getFreePort(){
-  return new Promise((resolve, reject) => {
-    const srv = net.createServer();
-    srv.on('error', reject);
-    srv.listen(0, '127.0.0.1', () => {
-      const p = srv.address().port;
-      srv.close(() => resolve(p));
-    })
-  })
-}
+// Configure logging early
+log.transports.file.level = 'info';
+log.info('[Boot] OctoClario v' + app.getVersion());
+autoUpdater.logger = log; // route updater logs into electron-log too
+log.info('[Logs file]', log.transports.file.getFile().path);
+
+// Optional: disable GPU if you want (set OCTO_DISABLE_GPU=1)
 if (process.env.OCTO_DISABLE_GPU === '1') app.disableHardwareAcceleration();
 
+// Single-instance lock
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
-  app.quit()
+  app.quit();
 }
 app.on('second-instance', () => {
   if (mainWindow) {
     mainWindow.show();
     mainWindow.focus();
   }
-})
-// ---- Check for dev mode ----
+});
+
+// Dev mode?
 const isDev = process.argv.includes('--dev');
 console.log(`[App Mode] Running in ${isDev ? 'DEV' : 'PRODUCTION'} mode`);
 
@@ -39,15 +40,30 @@ let mainWindow = null;
 let rProcess = null;
 const pidFile = () => path.join(app.getPath('userData'), 'r-pid.txt');
 
+// ---------- helpers ----------
+function getFreePort() {
+  return new Promise((resolve, reject) => {
+    const srv = net.createServer();
+    srv.on('error', reject);
+    srv.listen(0, '127.0.0.1', () => {
+      const p = srv.address().port;
+      srv.close(() => resolve(p));
+    });
+  });
+}
+
 function cleanupPidFile() {
-  try { fs.existsSync(pidFile()) && fs.unlinkSync(pidFile())} catch {}
+  try {
+    const p = pidFile();
+    if (fs.existsSync(p)) fs.unlinkSync(p);
+  } catch (_) {}
 }
 
 async function ensureNoStaleR() {
   try {
-    const pfile = pidFile();
-    if (!fs.existsSync(pfile)) return;
-    const raw = fs.readFileSync(pfile, 'utf8').trim();
+    const p = pidFile();
+    if (!fs.existsSync(p)) return;
+    const raw = fs.readFileSync(p, 'utf8').trim();
     const pid = parseInt(raw, 10);
     if (pid && !Number.isNaN(pid)) {
       console.log('[Startup] Killing stale R pid', pid);
@@ -59,7 +75,6 @@ async function ensureNoStaleR() {
   }
 }
 
-// ---- Wait for Shiny to be ready ----
 function waitForShinyServer(url, timeoutMs = 60000) {
   return new Promise((resolve, reject) => {
     const start = Date.now();
@@ -80,7 +95,7 @@ function waitForShinyServer(url, timeoutMs = 60000) {
   });
 }
 
-// ---- Launch R and extract port ----
+// ---------- R launcher ----------
 async function launchRAndGetPort() {
   const basePath   = isDev ? __dirname : process.resourcesPath;
   const rscriptPath = path.join(basePath, 'R-portable', 'bin', 'Rscript.exe');
@@ -97,7 +112,6 @@ async function launchRAndGetPort() {
     throw new Error('run-shiny.R not found');
   }
 
-  // Electron chooses the port
   const port = await getFreePort();
 
   const rProc = spawn(rscriptPath, [shinyScript, '--port', String(port)], {
@@ -110,7 +124,7 @@ async function launchRAndGetPort() {
 
   try {
     fs.mkdirSync(app.getPath('userData'), { recursive: true });
-    fs.writeFileSync(path.join(app.getPath('userData'), 'r-pid.txt'), String(rProc.pid));
+    fs.writeFileSync(pidFile(), String(rProc.pid));
   } catch (e) {
     console.warn('[PID] Could not write PID file:', e);
   }
@@ -119,18 +133,16 @@ async function launchRAndGetPort() {
   rProc.stderr.on('data', (data) => console.error('[R ERR]', data.toString()));
   rProc.on('close', (code) => console.log('[R] exited with code', code));
 
-  // We already know the port; return it now
   return { port, rProc };
 }
 
-
-// ---- Create Browser Window ----
+// ---------- Window (black splash, no flicker) ----------
 function createWindowWithSplash(targetUrl) {
   mainWindow = new BrowserWindow({
     width: 1024,
     height: 768,
     show: false,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#000000',
     webPreferences: {
       preload: path.join(app.getAppPath(), 'preload.js'),
       contextIsolation: true,
@@ -143,22 +155,24 @@ function createWindowWithSplash(targetUrl) {
   <!doctype html><html><head><meta charset="utf-8">
   <title>OctoClario</title>
   <style>
-    body{margin:0;display:flex;height:100vh;align-items:center;justify-content:center;font-family:Segoe UI, Arial}
-    .box{text-align:center}
-    .spinner{width:42px;height:42px;border:4px solid #ddd;border-top-color:#e53935;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 12px}
+    html,body{height:100%;margin:0;background:#000;color:#fff;font-family:Segoe UI, Arial}
+    .wrap{display:flex;height:100%;align-items:center;justify-content:center;text-align:center}
+    .spinner{width:42px;height:42px;border:4px solid rgba(255,255,255,.2);
+             border-top-color:#fff;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 12px}
     @keyframes spin{to{transform:rotate(360deg)}}
-    .ver{color:#888;font-size:12px;margin-top:8px}
+    .ver{color:#aaa;font-size:12px;margin-top:8px}
   </style></head>
-  <body><div class="box">
-    <div class="spinner"></div>
-    <div>Starting analysis server…</div>
-    <div class="ver">v${app.getVersion()}</div>
+  <body><div class="wrap">
+    <div>
+      <div class="spinner"></div>
+      <div>Starting analysis server…</div>
+      <div class="ver">v${app.getVersion()}</div>
+    </div>
   </div></body></html>`;
 
   mainWindow.loadURL('data:text/html;charset=UTF-8,' + encodeURIComponent(splash));
   mainWindow.once('ready-to-show', () => mainWindow.show());
 
-  // If the final load fails for any reason, show a friendly error
   mainWindow.webContents.on('did-fail-load', (e, code, desc, url) => {
     const html = `
       <h2 style="font-family:Segoe UI, Arial">Could not load UI</h2>
@@ -168,16 +182,14 @@ function createWindowWithSplash(targetUrl) {
     mainWindow.loadURL('data:text/html;charset=UTF-8,' + encodeURIComponent(html));
   });
 
-  // Extra diagnostics
   mainWindow.webContents.on('render-process-gone', (_e, details) => {
     console.warn('[Renderer]', details);
   });
 
-  // Now swap to Shiny when it’s ready
   waitForShinyServer(targetUrl, 60000)
     .then(() => mainWindow.loadURL(targetUrl))
     .catch((err) => {
-      console.error('[WaitForShiny] ', err);
+      console.error('[WaitForShiny]', err);
       dialog.showErrorBox('Shiny not responding', err.message);
       const html = `<h2 style="font-family:Segoe UI, Arial">OctoClario couldn’t start</h2>
         <p>${err.message}</p>
@@ -185,7 +197,6 @@ function createWindowWithSplash(targetUrl) {
       mainWindow.loadURL('data:text/html;charset=UTF-8,' + encodeURIComponent(html));
     });
 
-  // Helpful in DEV
   if (isDev || process.env.OCTO_DEVTOOLS === '1') {
     mainWindow.webContents.openDevTools({ mode: 'detach' });
   }
@@ -193,25 +204,21 @@ function createWindowWithSplash(targetUrl) {
   mainWindow.on('closed', () => { mainWindow = null; });
 }
 
-
-
-
-// ---- IPC ----
+// ---------- IPC ----------
 ipcMain.handle('dialog:openFolder', async () => {
   const result = await dialog.showOpenDialog({ properties: ['openDirectory'] });
   return result.canceled ? null : result.filePaths[0];
 });
-
-ipcMain.handle('dialog:saveFile', async (event, defaultName, filters) => {
+ipcMain.handle('dialog:saveFile', async (_event, defaultName, filters) => {
   const { canceled, filePath } = await dialog.showSaveDialog({
     defaultPath: defaultName,
-    filters: filters,
+    filters,
     properties: ['createDirectory']
   });
   return canceled ? null : filePath;
 });
 
-// ---- Shutdown handling (tree kill + cleanup) ----
+// ---------- Kill R tree ----------
 function killRProcessTree(signal = 'SIGTERM') {
   return new Promise((resolve) => {
     if (!rProcess || rProcess.killed) {
@@ -231,21 +238,19 @@ function killRProcessTree(signal = 'SIGTERM') {
   });
 }
 
-
-// ---- App lifecycle ----
+// ---------- App lifecycle ----------
 app.whenReady().then(async () => {
   Menu.setApplicationMenu(null);
 
-  // Updater logging (optional but very helpful)
-  try {
-    const log = require('electron-log');
-    autoUpdater.logger = log;
-    autoUpdater.logger.transports.file.level = 'info';
-    console.log('[Logs]', log.transports.file.getFile().path);
-  } catch {}
-
+  // Updater wiring (production only)
   if (!isDev) {
     autoUpdater.autoDownload = true;
+
+    autoUpdater.on('checking-for-update', () => log.info('[Updater] checking-for-update'));
+    autoUpdater.on('update-available', (info) => log.info('[Updater] update-available', info?.version));
+    autoUpdater.on('update-not-available', () => log.info('[Updater] update-not-available'));
+    autoUpdater.on('download-progress', (p) => log.info('[Updater] progress', Math.round(p.percent) + '%'));
+    autoUpdater.on('error', (err) => log.error('[Updater] error', err));
     autoUpdater.on('before-quit-for-update', () => killRProcessTree('SIGTERM'));
     autoUpdater.on('update-downloaded', () => {
       const res = dialog.showMessageBoxSync({
@@ -259,6 +264,7 @@ app.whenReady().then(async () => {
       });
       if (res === 0) autoUpdater.quitAndInstall(false, true);
     });
+
     try { autoUpdater.checkForUpdatesAndNotify(); } catch {}
   }
 
@@ -284,6 +290,6 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => { killRProcessTree(); });
 app.on('quit', () => { killRProcessTree(); });
 
+// Process-level safety
 process.on('SIGINT', () => killRProcessTree().then(() => process.exit(0)));
 process.on('SIGTERM', () => killRProcessTree().then(() => process.exit(0)));
-
