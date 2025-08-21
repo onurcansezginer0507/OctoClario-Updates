@@ -11,21 +11,21 @@ Sys.setenv(PATH = paste(
   sep = .Platform$path.sep
 ))
 
-library(shiny)
+suppressPackageStartupMessages({
+  library(shiny)
+  library(httpuv)
+})
 
-
-
-app_dir <- file.path(getwd(), "shiny-app")
-
-if (!dir.exists(app_dir)) {
-  cat(">>>ERROR_START<<< Shiny app folder not found: ", app_dir, "\n")
-  flush.console()
-  stop("App directory missing")
+args <- commandArgs(trailingOnly = TRUE)
+portArg <- NA_integer_
+if (length(args) >= 2 && args[1] == "--port"){
+  portArg <- suppressWarnings(as.integer(args[2]))
 }
 
-port <- httpuv::randomPort()
-
-cat(">>>PORT:", port, "\n")
-flush.console()
-
-shiny::runApp(app_dir, host = "127.0.0.1", port = port, launch.browser = FALSE)
+if (is.na(portArg) || portArg <= 0){
+  portArg <- httpuv::randomPort()
+}
+cat(">>>PORT:", portArg, "\n"); flush.console()
+app_dir <- file.path(getwd(), "shiny-app")
+options(shiny.launch.browser = FALSE)
+shiny::runApp(app_dir, host = "127.0.0.1", port = portArg, launch.browser = FALSE)
