@@ -252,17 +252,41 @@ app.whenReady().then(async () => {
     autoUpdater.on('download-progress', (p) => log.info('[Updater] progress', Math.round(p.percent) + '%'));
     autoUpdater.on('error', (err) => log.error('[Updater] error', err));
     autoUpdater.on('before-quit-for-update', () => killRProcessTree('SIGTERM'));
-    autoUpdater.on('update-downloaded', () => {
+    // ---- Updater: download → kill R → install ----
+    autoUpdater.on('update-downloaded', async (info) => {
       const res = dialog.showMessageBoxSync({
         type: 'info',
         buttons: ['Restart now', 'Later'],
         defaultId: 0,
         cancelId: 1,
         title: 'Update ready',
-        message: 'A new version of OctoClario has been downloaded.',
+        message: `OctoClario ${info?.version || ''} has been downloaded.`,
         detail: 'Restart now to install the update.'
       });
-      if (res === 0) autoUpdater.quitAndInstall(false, true);
+
+      if (res !== 0) return;
+
+      try {
+        // 1) Kill the R process tree FIRST to release locks in Program Files
+        await killRProcessTree('SIGTERM');
+        // optional safety escalation
+        await new Promise(r => setTimeout(r, 800));
+        await killRProcessTree('SIGKILL');
+
+    // 2) Close windows to drop remaining handles
+       const { BrowserWindow } = require('electron');
+        BrowserWindow.getAllWindows().forEach(w => {
+          try { w.removeAllListeners('close'); } catch {}
+          try { w.destroy(); } catch {}
+        });
+
+    // 3) Install update (don’t call app.quit() yourself here)
+        autoUpdater.quitAndInstall(false, true);
+      } catch (e) {
+        console.error('[Updater] graceful shutdown failed, forcing:', e);
+        // As a last resort, still try to proceed
+        autoUpdater.quitAndInstall(false, true);
+      }
     });
 
     try { autoUpdater.checkForUpdatesAndNotify(); } catch {}
