@@ -5,21 +5,54 @@ fmf_panel_v1 <- function(input_dir){
   } else if (length(list.files(path = input_dir, pattern = "Quantification Cq Results", full.names = TRUE)) > 1) {
     return("Error! Multiple Results Located in Input Directory")
   }
+  
+  sep <- c()
+  dec <- c()
+  if(count.fields(textConnection(readLines(list.files(path = input_dir,
+                                                      pattern = "Quantification Cq Results",
+                                                      full.names = TRUE), n = 1)), sep = ";") == 1 ){
+    sep <- ","
+    dec <- "."
+  }else{
+    sep <- ";"
+    dec <- ","
+  }
+  
   well_info <- as.data.frame(read.table(file = list.files(path = input_dir, pattern = "Quantification Cq Results", full.names = TRUE), header = TRUE, sep = ";", dec = ","))
+  if (ncol(well_info) < 2) {
+    well_info <- as.data.frame(read.table(file = list.files(path = input_dir, pattern = "Quantification Cq Results", full.names = TRUE), header = TRUE, sep = ",", dec = "."))
+  }
   well_info <- well_info[,c("Well", "Target", "Fluor", "Sample", "Content")]
   well_info$Well <- gsub("([A-Z])0([1-9])", "\\1\\2", well_info$Well)
   if (length(list.files(path = input_dir, pattern = "Melt Curve Derivative Results_Cy5", full.names = TRUE)) > 0) {
-    cy5_data <- as.data.frame(read.table(list.files(path = input_dir, pattern = "Melt Curve Derivative Results_Cy5", full.names = TRUE), header = TRUE, sep = ";", dec = ","))
+    cy5_data <- as.data.frame(read.table(list.files(path = input_dir, pattern = "Melt Curve Derivative Results_Cy5", full.names = TRUE), header = TRUE, sep = sep, dec = dec))
+    
+  }else {
+    cy5_data <- data.frame(Temperature = seq(35,84.8,0.3), Temperature_1 = seq(35,84.8,0.3),Temperature_2 = seq(35,84.8,0.3))
   }
+  
+  
   if (length(list.files(path = input_dir, pattern = "Melt Curve Derivative Results_FAM", full.names = TRUE)) > 0) {
-    fam_data <- as.data.frame(read.table(file = list.files(path = input_dir, pattern = "Melt Curve Derivative Results_FAM", full.names = TRUE), header = TRUE, sep = ";", dec = ","))
+    fam_data <- as.data.frame(read.table(file = list.files(path = input_dir, pattern = "Melt Curve Derivative Results_FAM", full.names = TRUE), header = TRUE, sep = sep, dec = dec))
+  }else {
+    fam_data <- data.frame(Temperature = seq(35,84.8,0.3), Temperature_1 = seq(35,84.8,0.3),Temperature_2 = seq(35,84.8,0.3))
   }
+  
   if (length(list.files(path = input_dir, pattern = "Melt Curve Derivative Results_HEX", full.names = TRUE)) > 0) {
-    hex_data <- as.data.frame(read.table(file = list.files(path = input_dir, pattern = "Melt Curve Derivative Results_HEX", full.names = TRUE), header = TRUE, sep = ";", dec = ","))
+    hex_data <- as.data.frame(read.table(file = list.files(path = input_dir, pattern = "Melt Curve Derivative Results_HEX", full.names = TRUE), header = TRUE, sep = sep, dec = dec))
+  }else {
+    hex_data <- data.frame(Temperature = seq(35,84.8,0.3), Temperature_1 = seq(35,84.8,0.3),Temperature_2 = seq(35,84.8,0.3))
   }
-  if (length(list.files(path = input_dir, pattern = "Melt Curve Derivative Results_ROX", full.names = TRUE)) > 0) {
-    rox_data <- as.data.frame(read.table(list.files(path = input_dir, pattern = "Melt Curve Derivative Results_ROX", full.names = TRUE), header = TRUE, sep = ";", dec = ","))
+  
+  if (length(list.files(path = input_dir, pattern = "Melt Curve Derivative Results_ROX", full.names = TRUE)) > 0 || length(list.files(path = input_dir, pattern = "Melt Curve Derivative Results_Texas Red", full.names = TRUE)) > 0){ 
+    if(length(list.files(path = input_dir, pattern = "Melt Curve Derivative Results_ROX", full.names = TRUE)) > 0){
+      rox_data <- as.data.frame(read.table(list.files(path = input_dir, pattern = "Melt Curve Derivative Results_ROX", full.names = TRUE), header = TRUE, sep = sep, dec = dec))
+    }
+  }else {
+    rox_data <- data.frame(Temperature = seq(35,84.8,0.3), Temperature_1 = seq(35,84.8,0.3),Temperature_2 = seq(35,84.8,0.3))
   }
+
+
   
   #parse fmf parameters
   

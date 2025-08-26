@@ -1,6 +1,6 @@
 {
   "name": "octoclario",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "OctoClario: Native R Shiny Desktop App",
   "author": "Onurcan Sezginer",
   "main": "main.js",

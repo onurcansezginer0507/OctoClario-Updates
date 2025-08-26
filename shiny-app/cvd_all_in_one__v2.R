@@ -8,28 +8,59 @@ cvd_all_in_one__v2 <- function(input_dir){
     return("Error! Multiple Results Located in Input Directory")
   }
   
-  
+  sep <- c()
+  dec <- c()
+  if(count.fields(textConnection(readLines(list.files(path = input_dir,
+                                                      pattern = "Quantification Cq Results",
+                                                      full.names = TRUE), n = 1)), sep = ";") == 1 ){
+    sep <- ","
+    dec <- "."
+  }else{
+    sep <- ";"
+    dec <- ","
+  }
   ##read data
   ##add if exist clause for checking weather the data exists in the first place, if it doesn't exist create an empty data frame of the same name 
   ##on the analysis part, if the data frame is empty, the loop must be skipped
   ## for pai and apoe, a line of if clause must be added before the analysis
   
   well_info <- as.data.frame(read.table(file = list.files(path = input_dir, pattern = "Quantification Cq Results", full.names = TRUE), header = TRUE, sep = ";", dec = ","))
+  if (ncol(well_info) < 2) {
+    well_info <- as.data.frame(read.table(file = list.files(path = input_dir, pattern = "Quantification Cq Results", full.names = TRUE), header = TRUE, sep = ",", dec = "."))
+  }
   well_info <- well_info[,c("Well", "Target", "Fluor", "Sample", "Content")]
   well_info$Well <- gsub("([A-Z])0([1-9])", "\\1\\2", well_info$Well)
-  if (length(list.files(path = input_dir, pattern = "Melt Curve Derivative Results_Cy5", full.names = TRUE)) > 0) {
-    cy5_data <- as.data.frame(read.table(list.files(path = input_dir, pattern = "Melt Curve Derivative Results_Cy5", full.names = TRUE), header = TRUE, sep = ";", dec = ","))
-  }
-  if (length(list.files(path = input_dir, pattern = "Melt Curve Derivative Results_FAM", full.names = TRUE)) > 0) {
-    fam_data <- as.data.frame(read.table(file = list.files(path = input_dir, pattern = "Melt Curve Derivative Results_FAM", full.names = TRUE), header = TRUE, sep = ";", dec = ","))
-  }
-  if (length(list.files(path = input_dir, pattern = "Melt Curve Derivative Results_HEX", full.names = TRUE)) > 0) {
-    hex_data <- as.data.frame(read.table(file = list.files(path = input_dir, pattern = "Melt Curve Derivative Results_HEX", full.names = TRUE), header = TRUE, sep = ";", dec = ","))
-  }
-  if (length(list.files(path = input_dir, pattern = "Melt Curve Derivative Results_ROX", full.names = TRUE)) > 0) {
-    rox_data <- as.data.frame(read.table(list.files(path = input_dir, pattern = "Melt Curve Derivative Results_ROX", full.names = TRUE), header = TRUE, sep = ";", dec = ","))
-  }
   
+  
+  if (length(list.files(path = input_dir, pattern = "Melt Curve Derivative Results_Cy5", full.names = TRUE)) > 0) {
+    cy5_data <- as.data.frame(read.table(list.files(path = input_dir, pattern = "Melt Curve Derivative Results_Cy5", full.names = TRUE), header = TRUE, sep = sep, dec = dec))
+    
+  }else {
+    cy5_data <- data.frame(Temperature = seq(35,84.8,0.3), Temperature_1 = seq(35,84.8,0.3),Temperature_2 = seq(35,84.8,0.3))
+  }
+
+
+  if (length(list.files(path = input_dir, pattern = "Melt Curve Derivative Results_FAM", full.names = TRUE)) > 0) {
+    fam_data <- as.data.frame(read.table(file = list.files(path = input_dir, pattern = "Melt Curve Derivative Results_FAM", full.names = TRUE), header = TRUE, sep = sep, dec = dec))
+  }else {
+    fam_data <- data.frame(Temperature = seq(35,84.8,0.3), Temperature_1 = seq(35,84.8,0.3),Temperature_2 = seq(35,84.8,0.3))
+  }
+
+  if (length(list.files(path = input_dir, pattern = "Melt Curve Derivative Results_HEX", full.names = TRUE)) > 0) {
+    hex_data <- as.data.frame(read.table(file = list.files(path = input_dir, pattern = "Melt Curve Derivative Results_HEX", full.names = TRUE), header = TRUE, sep = sep, dec = dec))
+  }else {
+    hex_data <- data.frame(Temperature = seq(35,84.8,0.3), Temperature_1 = seq(35,84.8,0.3),Temperature_2 = seq(35,84.8,0.3))
+  }
+
+  if (length(list.files(path = input_dir, pattern = "Melt Curve Derivative Results_ROX", full.names = TRUE)) > 0 || length(list.files(path = input_dir, pattern = "Melt Curve Derivative Results_Texas Red", full.names = TRUE)) > 0){ 
+    if(length(list.files(path = input_dir, pattern = "Melt Curve Derivative Results_ROX", full.names = TRUE)) > 0){
+      rox_data <- as.data.frame(read.table(list.files(path = input_dir, pattern = "Melt Curve Derivative Results_ROX", full.names = TRUE), header = TRUE, sep = sep, dec = dec))
+    }else if(length(list.files(path = input_dir, pattern = "Melt Curve Derivative Results_Texas Red", full.names = TRUE)) > 0){
+      rox_data <- as.data.frame(read.table(list.files(path = input_dir, pattern = "Melt Curve Derivative Results_Texas Red", full.names = TRUE), header = TRUE, sep = sep, dec = dec))
+    }
+  }else {
+    rox_data <- data.frame(Temperature = seq(35,84.8,0.3), Temperature_1 = seq(35,84.8,0.3),Temperature_2 = seq(35,84.8,0.3))
+  }
   
   
   
@@ -317,8 +348,12 @@ cvd_all_in_one__v2 <- function(input_dir){
             result_tb_list_11[[i]]$Tm[j] <- data_list_11[[names(result_tb_list_11[i])]][which(data_list_11[[names(result_tb_list_11[i])]][,j+1] %in% result_tb_list_11[[i]]$peak_1),1]
             
           }
-        }
-        else {
+        } else if(is.na(result_tb_list_11[[i]]$peak_2[j]) && names(result_tb_list_11)[i] == "A1298C"){
+          
+          if(result_tb_list_11[[i]]$min_dips[j] < a1298_melt[1] && result_tb_list_11[[i]]$max_dips[j] > a1298_melt[2]){
+            result_tb_list_11[[i]]$genotype[j] <- "Heterozygous"
+          }
+        } else {
           result_tb_list_11[[i]]$genotype[j] <- "Heterozygous"
         }
       }
@@ -514,18 +549,18 @@ cvd_all_in_one__v2 <- function(input_dir){
   }
   
   
-  
-  for (i in 1:length(result_tb_list_11)) {
-    result_tb_list_11[[i]]$Parameter <- c(rep(names(result_tb_list_11[i]), nrow(result_tb_list_11[[i]])))
-    result_tb_list_11[[i]] <- cbind(rownames(result_tb_list_11[[i]]), result_tb_list_11[[i]])
-    result_tb_list_11[[i]] <- result_tb_list_11[[i]][,c(1,7,9,8,4,5)]
-    colnames(result_tb_list_11[[i]]) <- c("Well", "Sample Name", "Parameter", "Genotype", "peak_1", "peak_2")
+  if(length(result_tb_list_11) > 0){
+    for (i in 1:length(result_tb_list_11)) {
+      result_tb_list_11[[i]]$Parameter <- c(rep(names(result_tb_list_11[i]), nrow(result_tb_list_11[[i]])))
+      result_tb_list_11[[i]] <- cbind(rownames(result_tb_list_11[[i]]), result_tb_list_11[[i]])
+      result_tb_list_11[[i]] <- result_tb_list_11[[i]][,c(1,7,9,8,4,5)]
+      colnames(result_tb_list_11[[i]]) <- c("Well", "Sample Name", "Parameter", "Genotype", "peak_1", "peak_2")
+    }
   }
+
   result_tb_cvd <- c(result_tb_list_11, list(result_tb_pai), apoe_table_final)
   names(result_tb_cvd) <- c(names(result_tb_list_11), "PAI", "APOE1", "APOE2", "APOE")
-  for (i in 1:length(result_tb_list_11)) {
-    result_tb_list_11[[i]] <- result_tb_list_11[[i]][!is.na(result_tb_list_11[[i]]$Genotype),]
-  }
+
   result_tb_cvd <- result_tb_cvd[sapply(result_tb_cvd, function(x) dim(x)[1]) > 0]
   
   return(list(result_tb_cvd,

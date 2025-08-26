@@ -731,7 +731,7 @@ server <- function(input, output, session) {
   
   observeEvent(input$run_analysis, {
     withProgress(message = "Running Analysis...", value = 0, {
-    showNotification("Starting analysis???", type = "message", duration = 2)
+    showNotification("Starting analysis...", type = "message", duration = 2)
     analysis_output(NULL); melting_curves_data(NULL)
     
     dirpath <- selected_directory()
@@ -751,16 +751,21 @@ server <- function(input, output, session) {
     }
     
     if (inherits(raw_cvd, "try-error") || !is_valid_results(raw_cvd)) {
-      showNotification("CVD analysis failed (both engines). Check files.", type = "error", duration = 6)
-      return()
+      showNotification("CVD analysis failed (both engines). Check files.", type = "message", duration = 6)
+      raw_cvd <- NULL
     }
     
     # FMF with the matching engine
-    raw_fmf <- try(
-      if (which_engine == "biorad") fmf_panel_v1(dirpath) else fmf_panel_rotor(dirpath),
-      silent = TRUE
-    )
-    if (inherits(raw_fmf, "try-error")) raw_fmf <- NULL
+    which_engine <- "biorad"
+    raw_fmf <- try(fmf_panel_v1(dirpath), silent = TRUE)
+    if (inherits(raw_fmf, "try-error") || !is_valid_results(raw_fmf)){
+      which_engine <- "rotor"
+      raw_fmf <- try(fmf_panel_rotor(dirpath), silent = TRUE)
+    }
+    if (inherits(raw_fmf, "try-error")){
+      showNotification("FMF analysis failed (both engines). Check files.", type = "message", duration = 6)
+      raw_fmf <- NULL
+    }
     
     # Normalize
     cvd_norm <- extract_results_plots(raw_cvd)
@@ -990,7 +995,7 @@ server <- function(input, output, session) {
     # Define the color map
     color_map <- c(
       "FV-LEI" = "blue", "FII" = "green", "A1298C" = "purple", "PAI" = "purple",
-      "HPAI" = "purple", "FV Camb" = "purple", "ACE" = "purple", "APOE1" = "orange",
+      "HPAI" = "purple", "FV CAMB" = "purple", "FV-CAMB" = "purple", "ACE" = "purple", "APOE1" = "orange",
       "APOE2" = "purple", "C677T" = "orange", "FXIII" = "orange", "FGB" = "orange",
       "APOB" = "orange", "LTA" = "orange", 
       "E148Q" = "orange", "R761H" = "purple", 
