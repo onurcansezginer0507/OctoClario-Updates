@@ -1196,7 +1196,11 @@ server <- function(input, output, session) {
     setColWidths(wb, "Summary Table", cols = 1:ncol(summary_data), widths = "auto")
     
     # ---- One sheet per parameter (Well column uses numbers for rotor) ----
-    parameters <- setdiff(unique(write_df$Parameter), c("APOE1", "APOE2"))
+    write_df2 <- write_df %>%
+      dplyr::filter(!Genotype %in% c("Pos Ctrl", "NTC")) %>%
+      dplyr::filter(!Parameter %in% c("APOE1", "APOE2")) 
+    
+    parameters <- setdiff(unique(write_df2$Parameter), c("APOE1", "APOE2"))
     
     for (p in parameters) {
       addWorksheet(wb, p)

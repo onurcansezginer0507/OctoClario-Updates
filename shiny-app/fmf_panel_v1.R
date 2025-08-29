@@ -502,8 +502,8 @@ fmf_panel_v1 <- function(input_dir){
           print(paste("DEBUG for Well:", current_well_name, "- Determined actual_genotype_parameter:", actual_genotype_parameter))
           
           # Apply Homozygous Mutant or Wild Type logic based on actual_genotype_parameter
-          if (actual_genotype_parameter %in% c("M694V", "E167D")) {
-            # Reverse logic for M694V and E167D
+          if (actual_genotype_parameter %in% c("M694V", "E167D", "V726A")) {
+            # Reverse logic for M694V and E167D and V726A
             if (actual_genotype_parameter %in% names(melt_for_all)) {
               mean_melt_temp <- mean(melt_for_all[[actual_genotype_parameter]])
               if (result_tb_all[[i]]$Tm[j-1] < mean_melt_temp) {
