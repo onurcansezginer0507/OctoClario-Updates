@@ -23,150 +23,80 @@ source("fmf_panel_rotor.R")
 
 ui <- dashboardPage(
   skin = "red",
-  dashboardHeader(
-    title = "OctoClario"
-  ),
+  dashboardHeader(title = "OctoClario"),
   dashboardSidebar(
-    div(style = "display: none;",
-        downloadButton("downloadData", "Save As")
-    ),
-    # Custom CSS to improve visibility and layout of elements within the dashboardSidebar
+    div(style = "display: none;", downloadButton("downloadData", "Save As")),
+    
+    # Sidebar assets + CSS
     tags$head(
-      tags$link(rel = "stylesheet", href = "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css",
-                integrity = "sha512-9usAa10IRO0HhonpyAIVpjrylPvoDwiPUiKdWk5t3PyolY1cOd4DSE0Ga+ri4AuTroPR5aQvXU9xC6qOPnzFeg==",
-                crossorigin = "anonymous", referrerpolicy = "no-referrer"),
-  
+      tags$link(
+        rel = "stylesheet",
+        href = "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css",
+        integrity = "sha512-9usAa10IRO0HhonpyAIVpjrylPvoDwiPUiKdWk5t3PyolY1cOd4DSE0Ga+ri4AuTroPR5aQvXU9xC6qOPnzFeg==",
+        crossorigin = "anonymous", referrerpolicy = "no-referrer"
+      ),
       tags$style(HTML("
         /* --- Sidebar Adjustments --- */
-        /* Adjust main sidebar width and corresponding content margins */
         .main-sidebar, .left-side {
-            width: 200px !important;
-            left: 0 !important;
-            transform: translateX(0px) !important;
-            -webkit-transform: translateX(0px) !important;
+          width: 200px !important;
+          left: 0 !important;
+          transform: translateX(0px) !important;
+          -webkit-transform: translateX(0px) !important;
         }
-        .main-header .navbar {
-            margin-left: 200px !important;
-        }
-        .content-wrapper, .right-side, .main-footer {
-            margin-left: 200px !important;
-        }
+        .main-header .navbar { margin-left: 200px !important; }
+        .content-wrapper, .right-side, .main-footer { margin-left: 200px !important; }
 
-        /* Adjustments for collapsed sidebar */
-        .sidebar-collapse .main-sidebar,
-        .sidebar-collapse .left-side {
-            width: 50px !important;
-            display: block !important;
-            
-            z-index: 810 !important;
-            left: 0 !important;
-            transform: translateX(0px) !important;
-            -webkit-transform: translateX(0px) !important;
-            text-align: center !important;
+        /* Collapsed sidebar */
+        .sidebar-collapse .main-sidebar, .sidebar-collapse .left-side {
+          width: 50px !important; display: block !important; z-index: 810 !important;
+          left: 0 !important; transform: translateX(0px) !important; -webkit-transform: translateX(0px) !important;
+          text-align: center !important;
         }
-        .sidebar-collapse .main-header .navbar {
-            margin-left: 50px !important;
-        }
-        .sidebar-collapse .content-wrapper,
-        .sidebar-collapse .main-footer {
-            margin-left: 50px !important;
-        }
+        .sidebar-collapse .main-header .navbar { margin-left: 50px !important; }
+        .sidebar-collapse .content-wrapper, .sidebar-collapse .main-footer { margin-left: 50px !important; }
 
-        /* Hide the main header title when sidebar is collapsed */
-        .sidebar-collapse .main-header .logo {
-          display: none !important;
-        }
+        .sidebar-collapse .main-header .logo { display: none !important; }
 
-        /* Adjustments for the main header title (logo) when sidebar is OPEN */
         .main-header .logo {
-            text-align: center;
-            padding-left: 5px;
-            padding-right: 5px;
-            overflow: hidden;
-            white-space: nowrap;
-            text-overflow: ellipsis;
+          text-align: center; padding-left: 5px; padding-right: 5px;
+          overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
         }
 
-        /* Sidebar internal element styling for better appearance and alignment */
         .main-sidebar h4 {
-            font-size: 1.1em;
-            color: white;
-            margin-left: 10px;
-            margin-right: 10px;
-            margin-top: 20px;
-            margin-bottom: 10px;
+          font-size: 1.1em; color: white; margin: 20px 10px 10px 10px;
         }
         .main-sidebar .btn {
-            width: calc(100% - 20px);
-            margin-left: 10px;
-            margin-right: 10px;
-            margin-bottom: 5px; /* ADJUSTED FOR CLOSER SPACING */
+          width: calc(100% - 20px); margin: 0 10px 5px 10px;
         }
         .main-sidebar .shiny-text-output {
-            color: #d2d2d2;
-            margin-left: 10px;
-            margin-right: 10px;
-            margin-bottom: 10px;
-            word-wrap: break-word;
+          color: #d2d2d2; margin: 0 10px 10px 10px; word-wrap: break-word;
         }
         .main-sidebar .help-block {
-            color: #b0b0b0;
-            margin-left: 10px;
-            margin-right: 10px;
-            font-size: 0.9em;
-            margin-bottom: 15px;
+          color: #b0b0b0; margin: 0 10px 15px 10px; font-size: 0.9em;
         }
-        .main-sidebar hr {
-            border-top: 1px solid #4a4a4a;
-            margin: 20px 10px;
-        }
+        .main-sidebar hr { border-top: 1px solid #4a4a4a; margin: 20px 10px; }
 
-        /* Adjustments for collapsed sidebar (mini-sidebar) - Hides text elements */
+        /* Hide text when collapsed */
         .sidebar-collapse .main-sidebar h4,
         .sidebar-collapse .main-sidebar .shiny-text-output,
-        .sidebar-collapse .main-sidebar .help-block {
-          display: none !important;
-        }
+        .sidebar-collapse .main-sidebar .help-block { display: none !important; }
 
-        /* Styling for ALL buttons in collapsed sidebar */
+        /* Buttons when collapsed */
         .sidebar-collapse .main-sidebar .btn {
-            display: block !important;
-            width: 35px !important;
-            height: 35px !important;
-            padding: 0 !important;
-            font-size: 0 !important;   /* Hide all direct text on the button */
-            margin-left: auto !important;
-            margin-right: auto !important;
-            margin-bottom: 5px; /* Ensure this matches for consistent spacing in collapsed mode */
-            background-color: #555555 !important;
-            color: #f8f9fa !important;
-            position: relative;
+          display: block !important; width: 35px !important; height: 35px !important;
+          padding: 0 !important; font-size: 0 !important; margin: 0 auto 5px auto !important;
+          background-color: #555555 !important; color: #f8f9fa !important; position: relative;
         }
-        /* Hide the button text specifically when collapsed (targets the text node) */
-        .sidebar-collapse .main-sidebar .btn > :not(svg) {
-            display: none !important;
-        }
-        /* Style the SVG icon within the collapsed button */
+        .sidebar-collapse .main-sidebar .btn > :not(svg) { display: none !important; }
         .sidebar-collapse .main-sidebar .btn svg {
-            display: block !important;
-            width: 18px !important;
-            height: 18px !important;
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            -webkit-transform: translate(-50%, -50%);
-            fill: currentColor !important;
+          display: block !important; width: 18px !important; height: 18px !important;
+          position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+          -webkit-transform: translate(-50%, -50%); fill: currentColor !important;
         }
-
-        /* Ensure icon (SVG) still has margin when sidebar is OPEN (next to text) */
-        .main-sidebar .btn svg {
-            margin-right: 5px; /* Adjust as needed for spacing */
-            vertical-align: middle; /* Align nicely with text */
-        }
+        .main-sidebar .btn svg { margin-right: 5px; vertical-align: middle; }
 
         .sidebar-mini.sidebar-collapse .main-sidebar .sidebar-menu>li.active>a {
-              border-left-color: #f39c12; /* Example: Active item color */
+          border-left-color: #f39c12;
         }
       "))
     ),
@@ -174,312 +104,269 @@ ui <- dashboardPage(
     h4("1. Select Data Directory"),
     actionButton(
       "select_folder_native",
-      HTML(
-        '<svg aria-hidden="true" focusable="false" data-prefix="fas" data-icon="folder-open"
-         class="svg-inline--fa fa-folder-open" role="img" xmlns="http://www.w3.org/2000/svg"
-         viewBox="0 0 576 512" style="fill: currentColor; width: 18px; height: 18px;">
-       <path d="M88 0H200c21.4 0 32.1 25.9 17 41L134.7 128H472c22.1 0 40 17.9 40 40V464c0 22.1-17.9 40-40 40H104c-22.1 0-40-17.9-40-40V96c0-22.1 17.9-40 40-40h48L110.7 23.4C103 15.7 92.9 0 88 0zm0 64V96H472V172c0 6.6-5.4 12-12 12H88c-6.6 0-12-5.4-12-12V64H88zm384 128V464H104V192H472z"></path>
-     </svg>
-     Select Data Folder'
+      HTML('
+        <svg aria-hidden="true" focusable="false" data-prefix="fas" data-icon="folder-open"
+             class="svg-inline--fa fa-folder-open" role="img" xmlns="http://www.w3.org/2000/svg"
+             viewBox="0 0 576 512" style="fill: currentColor; width: 18px; height: 18px;">
+          <path d="M88 0H200c21.4 0 32.1 25.9 17 41L134.7 128H472c22.1 0 40 17.9 40 40V464c0 22.1-17.9 40-40 40H104c-22.1 0-40-17.9-40-40V96c0-22.1 17.9-40 40-40h48L110.7 23.4C103 15.7 92.9 0 88 0zm0 64V96H472V172c0 6.6-5.4 12-12 12H88c-6.6 0-12-5.4-12-12V64H88zm384 128V464H104V192H472z"></path>
+        </svg>
+        Select Data Folder'
       )
     ),
     tags$br(),
     textOutput("selected_directory_path"),
     tags$script(HTML("
-  document.getElementById('select_folder_native').addEventListener('click', async () => {
-    try {
-      const folder = await window.electronAPI.chooseFolder();
-      if (folder) {
-        Shiny.setInputValue('selected_folder', folder, {priority:'event'});
-      }
-    } catch(e){ console.error(e); }
-  });
-")),
+      document.getElementById('select_folder_native').addEventListener('click', async () => {
+        try {
+          const folder = await window.electronAPI.chooseFolder();
+          if (folder) {
+            Shiny.setInputValue('selected_folder', folder, {priority:'event'});
+          }
+        } catch(e){ console.error(e); }
+      });
+    ")),
     hr(),
     
-    
     h4("2. Run Analysis"),
-    # MODIFIED: Added icon for running analysis
     actionButton(
       "run_analysis",
-      HTML(
-        "<svg aria-hidden=\"true\" focusable=\"false\" data-prefix=\"fas\" data-icon=\"play\" class=\"svg-inline--fa fa-play\" role=\"img\" xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 384 512\" style=\"fill: currentColor; width: 18px; height: 18px;\">
-            <path d=\"M361 215C375.3 223.8 384 239.1 384 256C384 272.9 375.3 288.2 361 296.1L73.03 472.1C58.21 482.6 39.66 482.4 25.02 471.5C10.35 460.7 0 440.8 0 416V96C0 71.17 10.35 51.33 25.02 40.46C39.66 29.59 58.21 29.4 73.03 39.87L361 215z\"></path>
-         </svg>
-         Run Analysis"
+      HTML('
+        <svg aria-hidden="true" focusable="false" data-prefix="fas" data-icon="play"
+             class="svg-inline--fa fa-play" role="img" xmlns="http://www.w3.org/2000/svg"
+             viewBox="0 0 384 512" style="fill: currentColor; width: 18px; height: 18px;">
+          <path d="M361 215C375.3 223.8 384 239.1 384 256C384 272.9 375.3 288.2 361 296.1L73.03 472.1C58.21 482.6 39.66 482.4 25.02 471.5C10.35 460.7 0 440.8 0 416V96C0 71.17 10.35 51.33 25.02 40.46C39.66 29.59 58.21 29.4 73.03 39.87L361 215z"></path>
+        </svg>
+        Run Analysis'
       )
     ),
     hr(),
+    
     h4("3. Save Results"),
-    actionButton("show_save_modal",
-                 HTML(
-                   "<svg aria-hidden=\"true\" focusable=\"false\" data-prefix=\"fas\" data-icon=\"download\" class=\"svg-inline--fa fa-download\" role=\"img\" xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 512 512\" style=\"fill: currentColor; width: 18px; height: 18px;\">
-        <path d=\"M352 96C352 78.3 337.7 64 320 64C302.3 64 288 78.3 288 96L288 306.7L246.6 265.3C234.1 252.8 213.8 252.8 201.3 265.3C188.8 277.8 188.8 298.1 201.3 310.6L297.3 406.6C309.8 419.1 330.1 419.1 342.6 406.6L438.6 310.6C451.1 298.1 451.1 277.8 438.6 265.3C426.1 252.8 405.8 252.8 393.3 265.3L352 306.7L352 96zM160 384C124.7 384 96 412.7 96 448L96 480C96 515.3 124.7 544 160 544L480 544C515.3 544 544 515.3 544 480L544 448C544 412.7 515.3 384 480 384L433.1 384L376.5 440.6C345.3 471.8 294.6 471.8 263.4 440.6L206.9 384L160 384zM464 440C477.3 440 488 450.7 488 464C488 477.3 477.3 488 464 488C450.7 488 440 477.3 440 464C440 450.7 450.7 440 464 440z\"></path>
-     </svg>
-                   Save As...")
+    actionButton(
+      "show_save_modal",
+      HTML('
+        <svg aria-hidden="true" focusable="false" data-prefix="fas" data-icon="download"
+             class="svg-inline--fa fa-download" role="img" xmlns="http://www.w3.org/2000/svg"
+             viewBox="0 0 512 512" style="fill: currentColor; width: 18px; height: 18px;">
+          <path d="M352 96C352 78.3 337.7 64 320 64C302.3 64 288 78.3 288 96L288 306.7L246.6 265.3C234.1 252.8 213.8 252.8 201.3 265.3C188.8 277.8 188.8 298.1 201.3 310.6L297.3 406.6C309.8 419.1 330.1 419.1 342.6 406.6L438.6 310.6C451.1 298.1 451.1 277.8 438.6 265.3C426.1 252.8 405.8 252.8 393.3 265.3L352 306.7L352 96zM160 384C124.7 384 96 412.7 96 448L96 480C96 515.3 124.7 544 160 544L480 544C515.3 544 544 515.3 544 480L544 448C544 412.7 515.3 384 480 384L433.1 384L376.5 440.6C345.3 471.8 294.6 471.8 263.4 440.6L206.9 384L160 384zM464 440C477.3 440 488 450.7 488 464C488 477.3 477.3 488 464 488C450.7 488 440 477.3 440 464C440 450.7 450.7 440 464 440z"></path>
+        </svg>
+        Save As...'
+      )
     ),
     tags$script(HTML("
-    Shiny.addCustomMessageHandler('bindSaveButton', function(message) {
-      const btn = document.getElementById('show_save_modal');
-      if (btn && !btn.dataset.bound) {
-        btn.dataset.bound = 'true'; // prevent rebinding
-        btn.addEventListener('click', async () => {
-          const filePath = await window.electronAPI.saveFile('analysis_results.xlsx', [
-            { name: 'Excel File', extensions: ['xlsx'] }
-          ]);
-          if (filePath) {
-            Shiny.setInputValue('save_analysis_path', filePath);
-          }
-        });
-      }
-    });
-  "))
+      Shiny.addCustomMessageHandler('bindSaveButton', function(message) {
+        const btn = document.getElementById('show_save_modal');
+        if (btn && !btn.dataset.bound) {
+          btn.dataset.bound = 'true';
+          btn.addEventListener('click', async () => {
+            const filePath = await window.electronAPI.saveFile('analysis_results.xlsx', [
+              { name: 'Excel File', extensions: ['xlsx'] }
+            ]);
+            if (filePath) {
+              Shiny.setInputValue('save_analysis_path', filePath);
+            }
+          });
+        }
+      });
+    "))
   ),
-  
   
   dashboardBody(
     shinyjs::useShinyjs(),
     
-    # Load Split.js CSS and JS
+    # Split.js + helper script
     tags$head(
-      tags$script(src = "split.min.js"), # <--- Using LOCAL file from www/
+      tags$script(src = "split.min.js"),
       tags$script(HTML("
-      Shiny.addCustomMessageHandler('download_file', function(message) {
-        var link = document.createElement('a');
-        link.href = window.URL.createObjectURL(new Blob([], {type: 'application/octet-stream'}));
-        link.download = message.filename;
-        link.click();
-        window.URL.revokeObjectURL(link.href);
-      });
-    ")),
-      tags$style(
-        HTML(
-          "
-  /* --- Split.js Specific CSS (Only for Vertical Split) --- */
-  #split-container {
-    display: flex;
-    flex-direction: column;
-    height: calc(100vh - 50px - 30px);
-    overflow: hidden;
-  }
-  #top-panel, #bottom-panel {
-    box-sizing: border-box;
-    padding: 15px;
-    overflow: auto;
-  }
-  .gutter {
-    background-color: #ccc !important;
-    background-repeat: no-repeat;
-    background-position: 50%;
-    height: 10px !important;
-    min-height: 10px;
-    border-top: 1px solid #aaa;
-    border-bottom: 1px solid #aaa;
-    z-index: 10;
-  }
-  .gutter.gutter-vertical {
-    background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAeCAYAAADkKxY0AAAABGdBTUEAALGPC/xhBQAAAB50RVh0Q3JlYXRpb24gVGltZQAxMC8xNS8xNiAyMDoxODoyNyBzcllHAAAAV0lEQVQYV2NsaHho/P//Px4+fHgC4T3qUoIAQIAgQEAIEBBIECDAECAYQIAAQYCAQICAwA2o+r/0z78/gAgQAAgQIBAgQEAIECAQECAAECAgAAgQAAAEAAAABAAK4s2L6PjO2QAAAABJRU5ErkJggg==');
-    cursor: row-resize;
-  }
-
-  /* --- Responsive 96-Well Plate with Legend --- */
-  .well-plate-layout-container {
-    display: grid;
-    grid-template-columns: 1fr 200px;
-    gap: 10px;
-    width: 100%;
-  }
-  .well-plate-container {
-    width: 100%;
-  }
-  .plate-grid {
-    display: grid;
-    grid-template-columns: 30px repeat(12, 1fr);
-    grid-template-rows:    30px repeat(8, 1fr);
-    gap: 4px;
-    width: 100%;
-    aspect-ratio: 13 / 9;
-  }
-  .plate-grid .col-label,
-  .plate-grid .row-label {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.8em;
-    font-weight: bold;
-  }
-  .plate-grid .corner {
-    /* empty top-left */
-  }
-  .plate-grid .well-button {
-    width: 100%;
-    height: 100%;
-    padding: 0;
-    box-sizing: border-box;
-  }
-
-  /* Legend styling */
-  .well-plate-legend {
-    margin-top: 5px;
-    font-size: 0.8em;
-    padding-left: 15px;
-  }
-  .well-plate-legend h4 {
-    margin-top: 0;
-    font-size: 1.1em;
-    color: #333;
-  }
-  .legend-item {
-    display: flex;
-    align-items: center;
-    margin-bottom: 5px;
-  }
-  .legend-color-box {
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    border: 1px solid #ccc;
-    margin-right: 10px;
-    flex-shrink: 0;
-  }
-
-    /* ---- Rotor-Gene circular view ---- */
-  .rotor-container { width: 100%; aspect-ratio: 1 / 1; }
-  .rotor-svg { width: 100%; height: auto; display: block; }
-  .rg-outline { fill: none; stroke: #e5e5e5; stroke-width: 0.6; }
-  .rg-spoke   { stroke: #e5e5e5; stroke-width: 0.4; }
-
-  .rg-well {
-    stroke: #66b2ff;
-    fill: #e6f7ff;
-    cursor: pointer;
-    transition: filter .15s ease;
-  }
-  .rg-well:hover { filter: brightness(0.95); }
-
-  .rg-label { font-size: 2.2px; font-weight: 600; pointer-events: none; }
-
-    /* Genotype fills for rotor wells */
-  .rg-well.rg-ntc    { fill: #bbdefb; stroke: #64b5f6; }
-  .rg-well.rg-pos    { fill: #c8e6c9; stroke: #81c784; }
-  .rg-well.rg-sample { fill: #e6f7ff; stroke: #66b2ff; }
-  .rg-well.rg-empty  { fill: #f5f5f5; stroke: #bbb; cursor: not-allowed; }
-
-    /* Legend color squares for rotor */
-  .legend-color-box.rg-ntc    { background-color: #bbdefb; border-color: #64b5f6; }
-  .legend-color-box.rg-pos    { background-color: #c8e6c9; border-color: #81c784; }
-  .legend-color-box.rg-sample { background-color: #e6f7ff; border-color: #66b2ff; }
-  .legend-color-box.rg-empty  { background-color: #f5f5f5; border-color: #bbb; }
-
-
-
-
-
-  /* Well button base */
-  .well-button {
-    position: relative;
-    border: 1px solid #ccc;
-    background-color: #eee;
-    cursor: pointer;
-    transition: background-color 0.2s, border-color 0.2s;
-    border-radius: 50%;
-    overflow: hidden;
-  }
-  .well-button span {
-    position: absolute;
-    top: 0; left: 0; bottom: 0; right: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: calc(1em + 0.2vw);
-    white-space: nowrap;
-  }
-  .well-button:hover {
-    background-color: #d0d0d0;
-    border-color: #999;
-  }
-
-  /* Genotype colors */
-  .well-ntc {
-    background-color: #bbdefb;
-    border-color: #64b5f6;
-  }
-  .well-ntc:hover {
-    background-color: #90caf9;
-    border-color: #42a5f5;
-  }
-  .well-pos-ctrl {
-    background-color: #c8e6c9;
-    border-color: #81c784;
-  }
-  .well-pos-ctrl:hover {
-    background-color: #a5d6a7;
-    border-color: #66bb6a;
-  }
-  .well-button-active {
-    background-color: #e6f7ff;
-    border-color: #66b2ff;
-  }
-  .well-button-active:hover {
-    background-color: #cceeff;
-  }
-  .well-button-inactive {
-    background-color: #f5f5f5;
-    color: #aaa;
-    cursor: not-allowed;
-    opacity: 0.7;
-  }
-"
-        )
-      )
-      
+        Shiny.addCustomMessageHandler('download_file', function(message) {
+          var link = document.createElement('a');
+          link.href = window.URL.createObjectURL(new Blob([], {type: 'application/octet-stream'}));
+          link.download = message.filename;
+          link.click();
+          window.URL.revokeObjectURL(link.href);
+        });
+      "))
     ),
+    # --- Stack Shiny toasts neatly (top-right) ---
+
     
-    # H3 and textOutput for Analysis Status are removed
-    # h3("Analysis Status:"),
-    # textOutput("status_message"),
+    # Main styles (layout, plate, rotor, buttons)
+    tags$style(HTML("
+      /* --- Split.js Specific CSS (Only for Vertical Split) --- */
+      #split-container {
+        display: flex; flex-direction: column;
+        height: calc(100vh - 50px - 30px);
+        overflow: hidden;
+      }
+      #top-panel, #bottom-panel {
+        box-sizing: border-box; padding: 15px; overflow: auto;
+      }
+      .gutter {
+        background-color: #ccc !important;
+        background-repeat: no-repeat; background-position: 50%;
+        height: 10px !important; min-height: 10px;
+        border-top: 1px solid #aaa; border-bottom: 1px solid #aaa; z-index: 10;
+      }
+      .gutter.gutter-vertical {
+        background-image: url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUAAAAeCAYAAADkKxY0AAAABGdBTUEAALGPC/xhBQAAAB50RVh0Q3JlYXRpb24gVGltZQAxMC8xNS8xNiAyMDoxODoyNyBzcllHAAAAV0lEQVQYV2NsaHho/P//Px4+fHgC4T3qUoIAQIAgQEAIEBBIECDAECAYQIAAQYCAQICAwA2o+r/0z78/gAgQAAgQIBAgQEAIECAQECAAECAgAAgQAAAEAAAABAAK4s2L6PjO2QAAAABJRU5ErkJggg==');
+        cursor: row-resize;
+      }
+
+      /* --- Responsive 96-Well Plate with Legend --- */
+      .well-plate-layout-container {
+        display: grid; grid-template-columns: 1fr 200px; gap: 10px; width: 100%;
+      }
+      .well-plate-container { width: 100%; }
+      .plate-grid {
+        display: grid;
+        grid-template-columns: 30px repeat(12, 1fr);
+        grid-template-rows: 30px repeat(8, 1fr);
+        gap: 4px; width: 100%; aspect-ratio: 13 / 9;
+      }
+      .plate-grid .col-label, .plate-grid .row-label {
+        display: flex; align-items: center; justify-content: center;
+        font-size: 0.8em; font-weight: bold;
+      }
+      .plate-grid .corner { /* empty top-left */ }
+      .plate-grid .well-button { width: 100%; height: 100%; padding: 0; box-sizing: border-box; }
+
+      /* Legend */
+      .well-plate-legend { margin-top: 5px; font-size: 0.8em; padding-left: 15px; }
+      .well-plate-legend h4 { margin-top: 0; font-size: 1.1em; color: #333; }
+      .legend-item { display: flex; align-items: center; margin-bottom: 5px; }
+      .legend-color-box {
+        width: 20px; height: 20px; border-radius: 50%;
+        border: 1px solid #ccc; margin-right: 10px; flex-shrink: 0;
+      }
+
+      /* Rotor-Gene circular view */
+      .rotor-container { width: 100%; aspect-ratio: 1 / 1; }
+      .rotor-svg { width: 100%; height: auto; display: block; }
+      .rg-outline { fill: none; stroke: #e5e5e5; stroke-width: 0.6; }
+      .rg-spoke   { stroke: #e5e5e5; stroke-width: 0.4; }
+      .rg-well {
+        stroke: #66b2ff; fill: #e6f7ff; cursor: pointer; transition: filter .15s ease;
+      }
+      .rg-well:hover { filter: brightness(0.95); }
+      .rg-label { font-size: 2.2px; font-weight: 600; pointer-events: none; }
+
+      /* Rotor genotype fills */
+      .rg-well.rg-ntc    { fill: #bbdefb; stroke: #64b5f6; }
+      .rg-well.rg-pos    { fill: #c8e6c9; stroke: #81c784; }
+      .rg-well.rg-sample { fill: #e6f7ff; stroke: #66b2ff; }
+      .rg-well.rg-empty  { fill: #f5f5f5; stroke: #bbb; cursor: not-allowed; }
+
+      .legend-color-box.rg-ntc    { background-color: #bbdefb; border-color: #64b5f6; }
+      .legend-color-box.rg-pos    { background-color: #c8e6c9; border-color: #81c784; }
+      .legend-color-box.rg-sample { background-color: #e6f7ff; border-color: #66b2ff; }
+      .legend-color-box.rg-empty  { background-color: #f5f5f5; border-color: #bbb; }
+
+      /* Well button base */
+      .well-button {
+        position: relative; border: 1px solid #ccc; background-color: #eee;
+        cursor: pointer; transition: background-color 0.2s, border-color 0.2s;
+        border-radius: 50%; overflow: hidden;
+      }
+      .well-button span {
+        position: absolute; top: 0; left: 0; bottom: 0; right: 0;
+        display: flex; align-items: center; justify-content: center;
+        font-size: calc(1em + 0.2vw); white-space: nowrap;
+      }
+      .well-button:hover { background-color: #d0d0d0; border-color: #999; }
+
+      /* Genotype colors */
+      .well-ntc       { background-color: #bbdefb; border-color: #64b5f6; }
+      .well-ntc:hover { background-color: #90caf9; border-color: #42a5f5; }
+      .well-pos-ctrl       { background-color: #c8e6c9; border-color: #81c784; }
+      .well-pos-ctrl:hover { background-color: #a5d6a7; border-color: #66bb6a; }
+      .well-button-active       { background-color: #e6f7ff; border-color: #66b2ff; }
+      .well-button-active:hover { background-color: #cceeff; }
+      .well-button-inactive { background-color: #f5f5f5; color: #aaa; cursor: not-allowed; opacity: 0.7; }
+    ")),
     
     # --- Outer Split.js Container (Vertical Split) ---
-    div(id = "split-container",
-        # Top Panel: Now contains standard Bootstrap columns
-        div(id = "top-panel",
-            fluidRow(
-              # Top Left Column: For the 96-Well Plate (width=5)
-              column(width = 5,
-                     div(class = "well-plate-container",
-                         # H3 and hr() for 96-Well Plate Overview are removed
-                         # h3("96-Well Plate Overview:"),
-                         uiOutput("well_plate_ui")
-                         # hr()
-                     )
-              ),
-              # Top Right Column: For Graphs (width=7)
-              column(width = 7,
-                     # This container will be hidden when a plot is rendered
-                     div(id = "plot_headers",
-                         h3("Graphs & Visualizations:"),
-                         h4("Melting Curve Plots:"),
-                         p("Click on a well in the 96-well plate to see its combined melting curve plot.")
-                     ),
-                     
-                     # A single plotOutput for the combined graph
-                     plotOutput("combined_well_plot", height = "250px"),
-              )
-            )
-        ),
-        # Bottom Panel: Remains the same, hosting analysis results
-        div(id = "bottom-panel",
-            h3("Analysis Results:"),
-            uiOutput("well_specific_results_ui"),
-            uiOutput("results_tabs"),
-            
+    div(
+      id = "split-container",
+      div(
+        id = "top-panel",
+        fluidRow(
+          column(
+            width = 5,
+            div(class = "well-plate-container", uiOutput("well_plate_ui"))
+          ),
+          column(
+            width = 7,
+            div(
+              id = "plot_headers",
+              h3("Graphs & Visualizations:"),
+              h4("Melting Curve Plots:"),
+              p("Click on a well in the 96-well plate to see its combined melting curve plot.")
+            ),
+            plotOutput("combined_well_plot", height = "250px")
+          )
         )
+      ),
+      div(
+        id = "bottom-panel",
+        h3("Analysis Results:"),
+        uiOutput("well_specific_results_ui"),
+        uiOutput("results_tabs")
+      )
     ),
-    # Hidden download link to be triggered programmatically
-    tags$a(id = "download_file_now", style = "display:none;", `data-name` = "download_file_now")
-    # --- END Outer Split.js Container ---
+    
+    # Hidden download link
+    tags$a(id = "download_file_now", style = "display:none;", `data-name` = "download_file_now"),
+    
+    # --- FINAL: toast position + look (wins via order) ---
+    # --- Toasts: keep Shiny's logic, just move the panel to top-right ---
+    tags$head(
+      tags$style(HTML("
+    /* Keep Shiny's panel; just pin it under the header, top-right */
+    #shiny-notification-panel {
+      position: fixed !important;
+      top: 60px !important;         /* under AdminLTE header */
+      right: 16px !important;
+      left: auto !important;
+      bottom: auto !important;
+      z-index: 9999 !important;
+    }
+
+    /* Make toasts responsive and wrap long paths so the X stays visible */
+    #shiny-notification-panel .shiny-notification {
+      width: auto !important;                      /* let it shrink */
+      max-width: min(520px, calc(100vw - 32px));   /* never wider than viewport */
+      box-sizing: border-box;
+      padding: 14px 28px 14px 18px;                /* extra room for the X */
+      margin-top: 10px !important;                 /* stack spacing */
+      font-size: 15px; line-height: 1.35;
+      box-shadow: 0 10px 28px rgba(0,0,0,.25);
+      overflow-wrap: anywhere;                     /* wrap long file names/paths */
+      word-break: break-word;
+    }
+
+    /* Visuals */
+    #shiny-notification-panel .shiny-notification-warning {
+      background: #fff9e6 !important;
+      border-left: 6px solid #f0ad4e !important;
+    }
+    #shiny-notification-panel .shiny-notification-error {
+      background: #fdecea !important;
+      border-left: 6px solid #d9534f !important;
+    }
+
+    /* Close button remains clickable and inside the card */
+    #shiny-notification-panel .shiny-notification .close {
+      position: absolute; top: 8px; right: 8px;
+      font-size: 18px; opacity: .7;
+    }
+    #shiny-notification-panel .shiny-notification .close:hover { opacity: 1; }
+  "))
+    )
+    
+    
   )
 )
+
 
 server <- function(input, output, session) {
   ## --- Toasts / Modals (reusable) ---
@@ -507,6 +394,19 @@ server <- function(input, output, session) {
     )
   }
   
+  is_biorad_export <- function(dir) {
+    files <- list.files(dir, full.names = FALSE)
+    any(grepl("Quantification Cq Results", files, ignore.case = TRUE)) ||
+      any(grepl("^Run Information\\.csv$", files, ignore.case = TRUE))
+  }
+  
+  is_rotor_export <- function(dir) {
+    csvs <- list.files(dir, pattern = "\\.csv$",  ignore.case = TRUE, full.names = FALSE)
+    xls  <- list.files(dir, pattern = "\\.(xlsx|xls)$", ignore.case = TRUE, full.names = FALSE)
+    length(csvs) == 1L && length(xls) == 1L
+  }
+  
+  
   
   strip_w <- function(x) sub("^w(?=\\d+$)", "", x, perl = TRUE)
   display_well <- function(x) ifelse(grepl("^w\\d+$", x), strip_w(x), x)
@@ -526,6 +426,115 @@ server <- function(input, output, session) {
     default
   }
   
+  `%||%` <- function(a,b) if (!is.null(a) && length(a) > 0) a else b
+  
+  # Wrap any analysis call and return a structured result
+  safe_call <- function(expr) {
+    warnings <- character(0)
+    
+    res <- tryCatch(
+      withCallingHandlers(
+        eval.parent(substitute(expr)),
+        warning = function(w) {
+          warnings <<- c(warnings, conditionMessage(w))
+          invokeRestart("muffleWarning")
+        }
+      ),
+      error = function(e) e
+    )
+    
+    # hard errors thrown with stop()
+    if (inherits(res, "error")) {
+      return(list(ok = FALSE, skipped = FALSE, code = "UNEXPECTED",
+                  detail = conditionMessage(res), warnings = warnings))
+    }
+    
+    # functions that return strings like "Error: E1" or "Skip: REASON"
+    if (is.character(res) && length(res) == 1L) {
+      if (startsWith(res, "Error: ")) {
+        msg <- sub("^Error:\\s*", "", res)
+        parts <- strsplit(msg, "\\|", fixed = FALSE)[[1]]
+        code  <- trimws(parts[1])
+        det   <- trimws(parts[2] %||% "")
+        return(list(ok = FALSE, skipped = FALSE, code = code, detail = det, warnings = warnings))
+      }
+      if (startsWith(res, "Skip: ")) {
+        reason <- sub("^Skip:\\s*", "", res)
+        return(list(ok = FALSE, skipped = TRUE, code = "SKIP", detail = reason, warnings = warnings))
+      }
+      # any other plain string -> treat as unexpected
+      return(list(ok = FALSE, skipped = FALSE, code = "UNEXPECTED", detail = res, warnings = warnings))
+    }
+    
+    # success path: the analysis functions return a (possibly unnamed) list
+    list(ok = TRUE, skipped = FALSE, data = res, warnings = warnings)
+  }
+  
+  # Turn an error code + optional detail into a user-facing sentence
+  err_msg <- function(code, detail = NULL) {
+    base <- switch(
+      code,
+      "E1"         = "Quantification Cq Results csv not found (or multiple files).",
+      "E2"         = "A well contains targets from different CVD mixes.",
+      "NO_WELLS"   = "No analyzable wells were detected.",
+      "SKIP"       = paste0("Skipped: ", detail %||% "no reason provided"),
+      "UNEXPECTED" = paste0("An unexpected error occurred. Details: ", detail %||% "(none)"),
+      paste0("Unknown error code: ", code, if (nzchar(detail %||% "")) paste0(" ??? ", detail))
+    )
+    paste(base, if(!is.null(detail) && nzchar(detail)) paste0("Details: ", detail) else "", sep = " ")
+  }
+  # Optional: toast the PAI-specific warnings your analysis emits
+  show_pai_toasts <- function(warns) {
+    if (is.null(warns) || length(warns) == 0) return(invisible())
+    
+    warns <- unique(as.character(warns))
+    
+    for (w in warns) {
+      # If our warning has a CODE: details shape (e.g., "PAI_MULTI_PC: ...")
+      if (grepl("^[A-Z_]+\\s*:", w)) {
+        code   <- sub("^\\s*([^:]+):.*$", "\\1", w)
+        detail <- sub("^[^:]+:\\s*", "", w)
+        
+        shiny::showNotification(
+          ui = htmltools::tagList(
+            htmltools::tags$div(
+              htmltools::tags$strong(code),
+              htmltools::tags$div(detail, style = "margin-top:6px; white-space:pre-wrap;")
+            )
+          ),
+          type        = "warning",
+          duration    = NULL,   # sticky: stays until the user closes
+          closeButton = TRUE
+        )
+      } else {
+        # fallback ??? show as-is
+        shiny::showNotification(
+          ui = htmltools::tags$div(w),
+          type        = "warning",
+          duration    = NULL,
+          closeButton = TRUE
+        )
+      }
+    }
+  }
+  
+  # Normalize return shape from analysis functions into $results and $plots
+  extract_results_plots <- function(x) {
+    if (is.null(x)) return(list(results = list(), plots = list()))
+    # already normalized?
+    if (is.list(x) && !is.null(x$results) && !is.null(x$plots)) {
+      return(list(results = x$results, plots = x$plots))
+    }
+    # our Bio-Rad / Rotor funcs return a 2-item list: [[1]] results list, [[2]] plots list
+    if (is.list(x) && length(x) >= 2 && is.list(x[[1]]) && is.list(x[[2]])) {
+      return(list(results = x[[1]], plots = x[[2]]))
+    }
+    # fallback: if it's a list of data.frames, treat as results
+    if (is.list(x) && all(vapply(x, function(y) is.data.frame(y) || is.list(y), logical(1)))) {
+      return(list(results = x, plots = list()))
+    }
+    list(results = list(), plots = list())
+  }
   
   # --- Folder picker UI (restores the 'Select Data Folder' button) ---
   output$folder_picker_ui <- renderUI({
@@ -731,73 +740,104 @@ server <- function(input, output, session) {
   
   observeEvent(input$run_analysis, {
     withProgress(message = "Running Analysis...", value = 0, {
-    showNotification("Starting analysis...", type = "message", duration = 2)
-    analysis_output(NULL); melting_curves_data(NULL)
-    
-    dirpath <- selected_directory()
-    if (is.null(dirpath) || !dir.exists(dirpath)) {
-      fatal_modal("No data folder",
-                  "Please click 'Select Data Folder' and choose a valid directory.")
-      return()
-    }
-    
-    # Try Bio-Rad first; if not valid, try Rotor-Gene
-    which_engine <- "biorad"
-    
-    raw_cvd <- try(cvd_all_in_one__v2(dirpath), silent = TRUE)
-    if (inherits(raw_cvd, "try-error") || !is_valid_results(raw_cvd)) {
-      which_engine <- "rotor"
-      raw_cvd <- try(cvd_all_in_one_rotor(dirpath), silent = TRUE)
-    }
-    
-    if (inherits(raw_cvd, "try-error") || !is_valid_results(raw_cvd)) {
-      showNotification("CVD analysis failed (both engines). Check files.", type = "message", duration = 6)
-      raw_cvd <- NULL
-    }
-    
-    # FMF with the matching engine
-    which_engine <- "biorad"
-    raw_fmf <- try(fmf_panel_v1(dirpath), silent = TRUE)
-    if (inherits(raw_fmf, "try-error") || !is_valid_results(raw_fmf)){
-      which_engine <- "rotor"
-      raw_fmf <- try(fmf_panel_rotor(dirpath), silent = TRUE)
-    }
-    if (inherits(raw_fmf, "try-error")){
-      showNotification("FMF analysis failed (both engines). Check files.", type = "message", duration = 6)
-      raw_fmf <- NULL
-    }
-    
-    # Normalize
-    cvd_norm <- extract_results_plots(raw_cvd)
-    fmf_norm <- extract_results_plots(raw_fmf)
-    
-    cvd_results <- cvd_norm$results
-    cvd_plots   <- cvd_norm$plots
-    fmf_results <- fmf_norm$results
-    fmf_plots   <- fmf_norm$plots
-    
-    # Combine
-    all_results_list <- c(cvd_results, fmf_results)
-    if (length(all_results_list) == 0) {
-      showNotification("No results produced.", type = "warning")
-      return()
-    }
-    
-    combined_df <- dplyr::bind_rows(all_results_list) %>%
-      dplyr::mutate(
-        Genotype = normalize_genotype(Genotype),
-        Well     = as.character(Well)
-      )
-    
-    analysis_output(combined_df)
-    melting_curves_data(c(cvd_plots, fmf_plots))
-    
-    
-    showNotification(sprintf("Analysis complete via %s.", if (which_engine=="biorad") "Bio-Rad" else "Rotor-Gene"),
-                     type = "message", duration = 3)
+      analysis_output(NULL); melting_curves_data(NULL)
+      dirpath <- selected_directory()
+      if (is.null(dirpath) || !dir.exists(dirpath)) {
+        fatal_modal("No data folder","Please click 'Select Data Folder' and choose a valid directory.")
+        return()
+      }
+      
+      is_valid_results <- function(raw) {
+        if (is.null(raw) || is.character(raw)) return(FALSE)
+        parts <- extract_results_plots(raw)
+        length(parts$results) > 0 && any(vapply(parts$results, nrow, 0L) > 0)
+      }
+      
+      ## CVD
+      ## CVD
+      cvd_engine <- NULL; raw_cvd <- NULL; cvd_msgs <- list()
+      cvd_br <- safe_call(cvd_all_in_one__v2(dirpath))
+      
+      if (!isTRUE(cvd_br$skipped) && isTRUE(cvd_br$ok) && is_valid_results(cvd_br$data)) {
+        cvd_engine <- "biorad"; raw_cvd <- cvd_br$data
+      }
+      show_pai_toasts(cvd_br$warnings)
+      
+      if (is.null(raw_cvd)) {
+        # Only try Rotor-Gene if the folder looks like one (avoid noisy errors on Bio-Rad runs)
+        if (!is_biorad_export(dirpath) && is_rotor_export(dirpath)) {
+          cvd_rg <- safe_call(cvd_all_in_one_rotor(dirpath))
+          if (!isTRUE(cvd_rg$skipped) && isTRUE(cvd_rg$ok) && is_valid_results(cvd_rg$data)) {
+            cvd_engine <- "rotor"; raw_cvd <- cvd_rg$data   # <-- fixed assignment
+          } else if (!isTRUE(cvd_rg$skipped) && !isTRUE(cvd_rg$ok)) {
+            cvd_msgs <- c(cvd_msgs, err_msg(cvd_rg$code, cvd_rg$detail))
+          }
+          show_pai_toasts(cvd_rg$warnings)
+        } else if (!isTRUE(cvd_br$skipped) && !isTRUE(cvd_br$ok)) {
+          # Bio-Rad had a real error (not a Skip)
+          cvd_msgs <- c(cvd_msgs, err_msg(cvd_br$code, cvd_br$detail))
+        }
+      }
+      
+      
+      ## FMF (independent)
+      ## FMF (independent)
+      fmf_engine <- NULL; raw_fmf <- NULL; fmf_msgs <- list()
+      fmf_br <- safe_call(fmf_panel_v1(dirpath))
+      
+      if (!isTRUE(fmf_br$skipped) && isTRUE(fmf_br$ok) && is_valid_results(fmf_br$data)) {
+        fmf_engine <- "biorad"; raw_fmf <- fmf_br$data
+      }
+      
+      if (is.null(raw_fmf)) {
+        if (!is_biorad_export(dirpath) && is_rotor_export(dirpath)) {
+          fmf_rg <- safe_call(fmf_panel_rotor(dirpath))
+          if (!isTRUE(fmf_rg$skipped) && isTRUE(fmf_rg$ok) && is_valid_results(fmf_rg$data)) {
+            fmf_engine <- "rotor"; raw_fmf <- fmf_rg$data   # <-- fixed assignment
+          } else if (!isTRUE(fmf_rg$skipped) && !isTRUE(fmf_rg$ok)) {
+            fmf_msgs <- c(fmf_msgs, err_msg(fmf_rg$code, fmf_rg$detail))
+          }
+        } else if (!isTRUE(fmf_br$skipped) && !isTRUE(fmf_br$ok)) {
+          fmf_msgs <- c(fmf_msgs, err_msg(fmf_br$code, fmf_br$detail))
+        }
+      }
+      
+      
+      ## Nothing?
+      if (is.null(raw_cvd) && is.null(raw_fmf)) {
+        if (length(c(cvd_msgs, fmf_msgs)) == 0L) {
+          fatal_modal("Nothing to analyze", "No recognizable CVD or FMF wells were found in this folder.")
+        } else {
+          fatal_modal("Analysis failed", paste(c(cvd_msgs, fmf_msgs), collapse = "\n\n"))
+        }
+        return()
+      }
+      
+      ## Notices: only warn if there was a real error (not a Skip)
+      if (!is.null(raw_cvd)) {
+        showNotification(sprintf("CVD parsed via %s.", if (cvd_engine=="biorad") "Bio-Rad" else "Rotor-Gene"),
+                         type="message", duration=3)
+      } else if (length(cvd_msgs)) {
+        showNotification(paste("CVD issue:", cvd_msgs[[1]]), type="warning", duration=8)
+      }
+      
+      if (!is.null(raw_fmf)) {
+        showNotification(sprintf("FMF parsed via %s.", if (fmf_engine=="biorad") "Bio-Rad" else "Rotor-Gene"),
+                         type="message", duration=3)
+      } else if (length(fmf_msgs)) {
+        showNotification(paste("FMF issue:", fmf_msgs[[1]]), type="warning", duration=8)
+      }
+      
+      ## Combine + render (same as you already do)
+      cvd_norm <- extract_results_plots(raw_cvd)
+      fmf_norm <- extract_results_plots(raw_fmf)
+      all_results_list <- c(cvd_norm$results, fmf_norm$results)
+      combined_df <- dplyr::bind_rows(all_results_list) %>% 
+        dplyr::mutate(Genotype = normalize_genotype(Genotype), Well = as.character(Well))
+      analysis_output(combined_df)
+      melting_curves_data(c(cvd_norm$plots, fmf_norm$plots))
     })
   })
-  
   
   
   
@@ -1120,7 +1160,7 @@ server <- function(input, output, session) {
     filtered_res <- res[ ! res$Parameter %in% c("APOE1","APOE2"), ]
     desired_order <- c(
       "FV-LEI","FII","A1298C","C677T","PAI","FXIII","HPAI",
-      "FGB","FV-CAMB","APOB","ACE","LTA","APOE",
+      "FGB","FV CAMB","APOB","ACE","LTA","APOE",
       "E148Q","R761H","F479L","P408Q","V726A",
       "P369S","M694V","M680I","A744S","E167D"
     )

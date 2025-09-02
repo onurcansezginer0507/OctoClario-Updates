@@ -1,13 +1,25 @@
-
+##helper functions
 '%!in%' <- function(x,y)!('%in%'(x,y))
+app_err  <- function(code, detail = NULL) {
+  if (is.null(detail) || !nzchar(detail)) paste0("Error: ", code) else paste0("Error: ", code, " | ", detail)
+}
+app_skip <- function(reason) paste0("Skip: ", reason)
+is_pos_ctrl <- function(x) {
+  grepl("^\\s*pos(itive)?\\s*(ctrl|control)\\s*$", x %||% "", ignore.case = TRUE)
+}
+`%||%` <- function(a,b) if (!is.null(a) && length(a)>0) a else b
+
+##main biorad cvd analysis function
+
 cvd_all_in_one__v2 <- function(input_dir){
   ##early errors
   if (length(list.files(path = input_dir, pattern = "Quantification Cq Results", full.names = TRUE)) < 1) {
-    return("Missing File: Quantification Cq Results.")
+    return("Error: E1")
   } else if (length(list.files(path = input_dir, pattern = "Quantification Cq Results", full.names = TRUE)) > 1) {
-    return("Error! Multiple Results Located in Input Directory")
+    return("Error: E1")
   }
   
+  ##read .csv format, check whether the file is separated with "," or ";" and decimals with "." or ","
   sep <- c()
   dec <- c()
   if(count.fields(textConnection(readLines(list.files(path = input_dir,
@@ -19,6 +31,39 @@ cvd_all_in_one__v2 <- function(input_dir){
     sep <- ";"
     dec <- ","
   }
+  
+  ## initialize melting points for parameters
+  fv_melt <- c(64,68)
+  fii_melt <- c(66,70)
+  c677_melt <- c(63,69)
+  a1298_melt <- c(63,70)
+  fxiii_melt <- c(66,71)
+  fgb_melt <- c(50,57)
+  hpai_melt <- c(63,67)
+  apob_melt <- c(62,67)
+  fvcamb_melt <- c(64,67)
+  lta_melt <- c(63,70)
+  ace_melt <- c(62,67)
+  apoe1_melt <- c(55,67)
+  apoe2_melt <- c(64,71)
+  melt_for_11 <- c(mean(fv_melt), mean(fii_melt), mean(c677_melt), mean(a1298_melt), mean(fxiii_melt), mean(fgb_melt), mean(hpai_melt), mean(apob_melt), mean(fvcamb_melt),  mean(ace_melt),mean(lta_melt))
+  names(melt_for_11) <- c("FV-LEI","FII", "C677T", "A1298C", "FXIII", "FGB", "HPAI",  "APOB","FV-CAMB", "ACE", "LTA")
+  melt_for_apoe <- c(mean(apoe1_melt), mean(apoe2_melt))
+  names(melt_for_apoe) <- c("APOE1", "APOE2")
+  melt_list_cvd <- list(fv_melt, fii_melt, c677_melt, a1298_melt, fxiii_melt, fgb_melt, hpai_melt, apob_melt, fvcamb_melt, ace_melt, lta_melt, apoe1_melt, apoe2_melt)
+  names(melt_list_cvd) <- c("FV-LEI","FII", "C677T", "A1298C", "FXIII", "FGB", "HPAI",  "APOB","FV-CAMB", "ACE", "LTA", "APOE1", "APOE2")
+  
+  
+  ##initialize CVD mix check
+  
+  cvd_mix_all <- list(
+    CVDM1 = c("FV", "FII", "C677T", "A1298C"),
+    CVDM2 = c("FXIII", "PAI"),
+    CVDM3 = c("FGB", "HPAI"),
+    CVDM4 = c("FV-CAMB", "APOB"),
+    CVDM5 = c("ACE", "LTA"),
+    CVDM6 = c("APOE1", "APOE2")
+  )
   ##read data
   ##add if exist clause for checking weather the data exists in the first place, if it doesn't exist create an empty data frame of the same name 
   ##on the analysis part, if the data frame is empty, the loop must be skipped
@@ -30,6 +75,38 @@ cvd_all_in_one__v2 <- function(input_dir){
   }
   well_info <- well_info[,c("Well", "Target", "Fluor", "Sample", "Content")]
   well_info$Well <- gsub("([A-Z])0([1-9])", "\\1\\2", well_info$Well)
+  well_info$MIX <- rep(NA_character_, nrow(well_info))
+  ##check the well contents, see if they match the mix contents
+  ##assign mixes to parameters
+  for (i in 1:nrow(well_info)) {
+    for (j in seq_along(cvd_mix_all)) {
+      if (well_info$Target[i] %in% cvd_mix_all[[j]]) {
+        well_info$MIX[i] <- names(cvd_mix_all)[j]
+      }
+    }
+  }
+  well_info <- well_info[well_info$MIX %in% names(cvd_mix_all),]
+  if (length(unique(well_info$Well)) == 0) {
+    return(app_skip("NO_WELLS_CVD"))
+  }
+  ##check well content, if there are two mixes in the same well, return error
+  ## --- replace your current per-well E2 check with this block ---
+  
+  # Any well that has targets from more than one CVD mix?
+  mixes_per_well <- split(well_info$MIX, well_info$Well)
+  bad_wells <- names(Filter(function(x) length(unique(x)) > 1, mixes_per_well))
+  
+  if (length(bad_wells)) {
+    # Build a readable per-well summary: WELL ??? mixes: [...]; targets: [...]
+    detail <- vapply(bad_wells, function(w) {
+      mx <- sort(unique(well_info$MIX[well_info$Well == w]))
+      tg <- sort(unique(well_info$Target[well_info$Well == w]))
+      sprintf("%s ??? mixes: [%s]; targets: [%s]",
+              w, paste(mx, collapse = ", "), paste(tg, collapse = ", "))
+    }, FUN.VALUE = character(1))
+    
+    return(app_err("E2", paste(detail, collapse = " | ")))
+  }
   
   
   if (length(list.files(path = input_dir, pattern = "Melt Curve Derivative Results_Cy5", full.names = TRUE)) > 0) {
@@ -38,20 +115,20 @@ cvd_all_in_one__v2 <- function(input_dir){
   }else {
     cy5_data <- data.frame(Temperature = seq(35,84.8,0.3), Temperature_1 = seq(35,84.8,0.3),Temperature_2 = seq(35,84.8,0.3))
   }
-
-
+  
+  
   if (length(list.files(path = input_dir, pattern = "Melt Curve Derivative Results_FAM", full.names = TRUE)) > 0) {
     fam_data <- as.data.frame(read.table(file = list.files(path = input_dir, pattern = "Melt Curve Derivative Results_FAM", full.names = TRUE), header = TRUE, sep = sep, dec = dec))
   }else {
     fam_data <- data.frame(Temperature = seq(35,84.8,0.3), Temperature_1 = seq(35,84.8,0.3),Temperature_2 = seq(35,84.8,0.3))
   }
-
+  
   if (length(list.files(path = input_dir, pattern = "Melt Curve Derivative Results_HEX", full.names = TRUE)) > 0) {
     hex_data <- as.data.frame(read.table(file = list.files(path = input_dir, pattern = "Melt Curve Derivative Results_HEX", full.names = TRUE), header = TRUE, sep = sep, dec = dec))
   }else {
     hex_data <- data.frame(Temperature = seq(35,84.8,0.3), Temperature_1 = seq(35,84.8,0.3),Temperature_2 = seq(35,84.8,0.3))
   }
-
+  
   if (length(list.files(path = input_dir, pattern = "Melt Curve Derivative Results_ROX", full.names = TRUE)) > 0 || length(list.files(path = input_dir, pattern = "Melt Curve Derivative Results_Texas Red", full.names = TRUE)) > 0){ 
     if(length(list.files(path = input_dir, pattern = "Melt Curve Derivative Results_ROX", full.names = TRUE)) > 0){
       rox_data <- as.data.frame(read.table(list.files(path = input_dir, pattern = "Melt Curve Derivative Results_ROX", full.names = TRUE), header = TRUE, sep = sep, dec = dec))
@@ -82,34 +159,12 @@ cvd_all_in_one__v2 <- function(input_dir){
   apoe2_data <- as.data.frame(cy5_data[,c("Temperature", well_info[grep(pattern = "apoe2", well_info$Target, ignore.case = TRUE), "Well"])])
   
   data_list_11 <- list(fv_data, fii_data,  c677_data, a1298_data, fxiii_data, fgb_data, hpai_data,  apob_data,fvcamb_data, ace_data, lta_data)
-  names(data_list_11) <- c("FV-LEI","FII", "C677T", "A1298C", "FXIII", "FGB", "HPAI","APOB",  "FV CAMB", "ACE", "LTA")
+  names(data_list_11) <- c("FV-LEI","FII", "C677T", "A1298C", "FXIII", "FGB", "HPAI","APOB",  "FV-CAMB", "ACE", "LTA")
   data_list_apoe <- list(apoe1_data, apoe2_data)
-  names(data_list_apoe) <- list("APOE1", "APOE2")
+  names(data_list_apoe) <- c("APOE1", "APOE2")
   data_list_graph <- list(fv_data, fii_data,  c677_data, a1298_data, fxiii_data, pai_data, fgb_data, hpai_data,  apob_data,fvcamb_data, ace_data, lta_data, apoe1_data, apoe2_data)
-  names(data_list_graph) <- c("FV-LEI","FII", "C677T", "A1298C", "FXIII", "PAI", "FGB", "HPAI","APOB",  "FV CAMB", "ACE", "LTA", "APOE1", "APOE2")
+  names(data_list_graph) <- c("FV-LEI","FII", "C677T", "A1298C", "FXIII", "PAI", "FGB", "HPAI","APOB",  "FV-CAMB", "ACE", "LTA", "APOE1", "APOE2")
   
-  ##parameter melting points
-  
-  fv_melt <- c(64,68)
-  fii_melt <- c(66,70)
-  c677_melt <- c(63,69)
-  a1298_melt <- c(63,70)
-  fxiii_melt <- c(66,71)
-  fgb_melt <- c(50,57)
-  hpai_melt <- c(63,67)
-  apob_melt <- c(62,67)
-  fvcamb_melt <- c(64,67)
-  lta_melt <- c(63,70)
-  ace_melt <- c(62,67)
-  apoe1_melt <- c(55,67)
-  apoe2_melt <- c(64,71)
-  
-  melt_for_11 <- c(mean(fv_melt), mean(fii_melt), mean(c677_melt), mean(a1298_melt), mean(fxiii_melt), mean(fgb_melt), mean(hpai_melt), mean(apob_melt), mean(fvcamb_melt),  mean(ace_melt),mean(lta_melt))
-  names(melt_for_11) <- c("FV-LEI","FII", "C677T", "A1298C", "FXIII", "FGB", "HPAI",  "APOB","FV CAMB", "ACE", "LTA")
-  melt_for_apoe <- c(mean(apoe1_melt), mean(apoe2_melt))
-  names(melt_for_apoe) <- list("APOE1", "APOE2")
-  melt_list_cvd <- list(fv_melt, fii_melt, c677_melt, a1298_melt, fxiii_melt, fgb_melt, hpai_melt, apob_melt, fvcamb_melt, ace_melt, lta_melt, apoe1_melt, apoe2_melt)
-  names(melt_list_cvd) <- c("FV-LEI","FII", "C677T", "A1298C", "FXIII", "FGB", "HPAI",  "APOB","FV CAMB", "ACE", "LTA", "APOE1", "APOE2")
   
   ## well information data frames and lists
   
@@ -129,9 +184,10 @@ cvd_all_in_one__v2 <- function(input_dir){
   well_info_apoe2 <-well_info[grep(pattern = "apoe2", well_info$Target, ignore.case = TRUE),]
   
   well_list_11 <- list(well_info_fv, well_info_fii,  well_info_677, well_info_1298, well_info_fxiii, well_info_fgb, well_info_hpai,  well_info_apob, well_info_fvcamb, well_info_ace, well_info_lta)
-  names(well_list_11) <- c("FV-LEI","FII", "C677T", "A1298C", "FXIII", "FGB", "HPAI",  "APOB","FV CAMB", "ACE", "LTA")
+  names(well_list_11) <- c("FV-LEI","FII", "C677T", "A1298C", "FXIII", "FGB", "HPAI",  "APOB","FV-CAMB", "ACE", "LTA")
   well_list_apoe <- list(well_info_apoe1, well_info_apoe2)
-  names(well_list_apoe) <- list("APOE1", "APOE2")
+  names(well_list_apoe) <- c("APOE1", "APOE2")
+  
   
   ##result tables
   result_tb_list_11 <- list()
@@ -150,9 +206,31 @@ cvd_all_in_one__v2 <- function(input_dir){
   data_list_11 <- data_list_11[result_tb_names]
   ##for pai
   reference_pai_genotype <- "4G-5G"
-  reference_pai_well <- well_info_pai$Well[well_info_pai$Content == "Pos Ctrl"]
+  has_pai_targets <- nrow(well_info_pai) > 0
+  has_pai_curves  <- ncol(pai_data) > 1  # >1 means Temperature + at least one well column
   
-  if (ncol(pai_data) > 1) {
+  reference_pai_well <- character(0)
+  
+  if (has_pai_targets || has_pai_curves) {
+    pai_pc_wells <- well_info_pai$Well[is_pos_ctrl(well_info_pai$Content)]
+    
+    if (length(pai_pc_wells) == 0) {
+      # Inform the user, but do NOT hard-fail the whole CVD analysis.
+      # PAI will be skipped downstream because reference_pai_well stays empty.
+      warning("PAI_NO_PC: PAI targets/wells detected but no PAI positive control was labeled; PAI genotyping will be skipped.")
+    } else if (length(pai_pc_wells) > 1) {
+      # Choose the first deterministically; still tell the user.
+      reference_pai_well <- pai_pc_wells[1]
+      warning(sprintf(
+        "PAI_MULTI_PC: Multiple PAI positive controls detected (%s); using %s for genotype boundaries.",
+        paste(pai_pc_wells, collapse = ", "), reference_pai_well
+      ))
+    } else {
+      reference_pai_well <- pai_pc_wells
+    }
+  }
+  
+  if (ncol(pai_data) > 1 && length(reference_pai_well) > 0) {
     pai_data <- as.data.frame(pai_data)
     pai_data_graph <- pai_data
     pai_data <- pai_data[pai_data[,1] < 78,]
@@ -259,7 +337,7 @@ cvd_all_in_one__v2 <- function(input_dir){
           min_dips <- c(min_dips, min(data_list_11[[i]][which(data_list_11[[i]][,j] > max(data_list_11[[i]][,j]/2)),1]))
           max_dips <- c(max_dips, max(data_list_11[[i]][which(data_list_11[[i]][,j] > max(data_list_11[[i]][,j]/2)),1]))
         }
-        for (k in 2:nrow(data_list_11[[i]]-1)) {
+        for (k in 2:(nrow(data_list_11[[i]])-1)) {
           if(max(data_list_11[[i]][,j]) > 50){
             if(data_list_11[[i]][k,1] > lower_bound && data_list_11[[i]][k,1] < upper_bound){
               if (data_list_11[[i]][k+1,j] < data_list_11[[i]][k,j] && data_list_11[[i]][k-1,j] < data_list_11[[i]][k,j]) {
@@ -532,7 +610,7 @@ cvd_all_in_one__v2 <- function(input_dir){
       } else {
         result_tb_list_apoe_final$genotype[i] <- "Pos Ctrl"
       }
-        
+      
       
     }
     result_tb_list_apoe_final$Parameter <- "APOE"
@@ -557,10 +635,10 @@ cvd_all_in_one__v2 <- function(input_dir){
       colnames(result_tb_list_11[[i]]) <- c("Well", "Sample Name", "Parameter", "Genotype", "peak_1", "peak_2")
     }
   }
-
+  
   result_tb_cvd <- c(result_tb_list_11, list(result_tb_pai), apoe_table_final)
   names(result_tb_cvd) <- c(names(result_tb_list_11), "PAI", "APOE1", "APOE2", "APOE")
-
+  
   result_tb_cvd <- result_tb_cvd[sapply(result_tb_cvd, function(x) dim(x)[1]) > 0]
   
   return(list(result_tb_cvd,

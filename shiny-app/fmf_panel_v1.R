@@ -1,9 +1,20 @@
 library(dplyr)
+'%!in%' <- function(x,y)!('%in%'(x,y))
+app_err  <- function(code, detail = NULL) {
+  if (is.null(detail) || !nzchar(detail)) paste0("Error: ", code) else paste0("Error: ", code, " | ", detail)
+}
+app_skip <- function(reason) paste0("Skip: ", reason)
+is_pos_ctrl <- function(x) {
+  grepl("^\\s*pos(itive)?\\s*(ctrl|control)\\s*$", x %||% "", ignore.case = TRUE)
+}
+`%||%` <- function(a,b) if (!is.null(a) && length(a)>0) a else b
+
+##main biorad cvd analysis function
 fmf_panel_v1 <- function(input_dir){
   if (length(list.files(path = input_dir, pattern = "Quantification Cq Results", full.names = TRUE)) < 1) {
-    return("Missing File: Quantification Cq Results.")
+    return("Error: E1")
   } else if (length(list.files(path = input_dir, pattern = "Quantification Cq Results", full.names = TRUE)) > 1) {
-    return("Error! Multiple Results Located in Input Directory")
+    return("Error: E1")
   }
   
   sep <- c()
@@ -17,13 +28,40 @@ fmf_panel_v1 <- function(input_dir){
     sep <- ";"
     dec <- ","
   }
-  
+  fmf_mix_all <- list(
+    FMFM1 = c("R761H", "E148Q"),
+    FMFM2 = c("F479L", "P408Q"),
+    FMFM3 = c("V726A", "P369S"),
+    FMFM4 = c("M680I", "M694V"),
+    FMFM5 = c("A744S", "E167D")
+  )
   well_info <- as.data.frame(read.table(file = list.files(path = input_dir, pattern = "Quantification Cq Results", full.names = TRUE), header = TRUE, sep = ";", dec = ","))
   if (ncol(well_info) < 2) {
     well_info <- as.data.frame(read.table(file = list.files(path = input_dir, pattern = "Quantification Cq Results", full.names = TRUE), header = TRUE, sep = ",", dec = "."))
   }
   well_info <- well_info[,c("Well", "Target", "Fluor", "Sample", "Content")]
   well_info$Well <- gsub("([A-Z])0([1-9])", "\\1\\2", well_info$Well)
+  well_info$MIX <- rep(NA_character_, nrow(well_info))
+  
+  for (i in 1:nrow(well_info)) {
+    for (j in seq_along(fmf_mix_all)) {
+      if (well_info$Target[i] %in% fmf_mix_all[[j]]) {
+        well_info$MIX[i] <- names(fmf_mix_all)[j]
+      }
+    }
+  }
+  well_info <- well_info[well_info$MIX %in% names(fmf_mix_all),]
+  if (length(unique(well_info$Well)) == 0) {
+    return(app_skip("NO_WELLS_FMF"))
+  }
+  ##check well content, if there are two mixes in the same well, return error
+  for (i in seq_along(well_info$Well[well_info$MIX %in% names(fmf_mix_all)])) {
+    current_well <- well_info$Well[i]
+    if (length(unique(well_info[well_info$Well == current_well,]$MIX)) > 1) {
+      return(app_err("E2", sprintf("Well %s contains targets from different mixes: ", current_well)))
+    }
+  }
+  
   if (length(list.files(path = input_dir, pattern = "Melt Curve Derivative Results_Cy5", full.names = TRUE)) > 0) {
     cy5_data <- as.data.frame(read.table(list.files(path = input_dir, pattern = "Melt Curve Derivative Results_Cy5", full.names = TRUE), header = TRUE, sep = sep, dec = dec))
     
@@ -89,7 +127,7 @@ fmf_panel_v1 <- function(input_dir){
   m680i_melt <- c(47, 59)
   m680i_ga_melt <- c(48,59)
   e167d_melt <- c(57.6, 65)
-  a744s_melt <- c(49.2, 59.4)
+  a744s_melt <- c(49.2, 60,5)
   
   melt_for_all <- list(
     E148Q = e148q_melt,

@@ -60,16 +60,16 @@ cvd_all_in_one_rotor <- function(input_dir){
     melt_tables[[i]] <- melt_tables[[i]][3:nrow(melt_tables[[i]]),]
     melt_tables[[i]] <- as.data.frame(apply(melt_tables[[i]], 2, as.numeric))
   }
-    cy5_data <- as.data.frame(melt_tables$cy5_data)
-    rox_data <- as.data.frame(melt_tables$rox_data)
-    fam_data <- as.data.frame(melt_tables$fam_data)
-    hex_data <- as.data.frame(melt_tables$hex_data)
-    colnames(cy5_data)[2:ncol(cy5_data)] <- paste0("w", trimws(colnames(cy5_data)[2:ncol(cy5_data)]))
-    colnames(rox_data)[2:ncol(rox_data)] <- paste0("w", trimws(colnames(rox_data)[2:ncol(rox_data)]))
-    colnames(fam_data)[2:ncol(fam_data)] <- paste0("w", trimws(colnames(fam_data)[2:ncol(fam_data)]))
-    colnames(hex_data)[2:ncol(hex_data)] <- paste0("w", trimws(colnames(hex_data)[2:ncol(hex_data)]))
+  cy5_data <- as.data.frame(melt_tables$cy5_data)
+  rox_data <- as.data.frame(melt_tables$rox_data)
+  fam_data <- as.data.frame(melt_tables$fam_data)
+  hex_data <- as.data.frame(melt_tables$hex_data)
+  colnames(cy5_data)[2:ncol(cy5_data)] <- paste0("w", trimws(colnames(cy5_data)[2:ncol(cy5_data)]))
+  colnames(rox_data)[2:ncol(rox_data)] <- paste0("w", trimws(colnames(rox_data)[2:ncol(rox_data)]))
+  colnames(fam_data)[2:ncol(fam_data)] <- paste0("w", trimws(colnames(fam_data)[2:ncol(fam_data)]))
+  colnames(hex_data)[2:ncol(hex_data)] <- paste0("w", trimws(colnames(hex_data)[2:ncol(hex_data)]))
   
-
+  
   well_info <- read_excel(xls, sheet = 1)
   well_info <- well_info[well_info$Selected == "Yes",]
   well_info <- as.data.frame(well_info[,c(2,3,4,5)])
@@ -596,6 +596,5 @@ cvd_all_in_one_rotor <- function(input_dir){
   
   return(list(results = result_tb_cvd,
               plots = data_list_graph_cvd))
-
+  
 }
-
