@@ -9,6 +9,261 @@ is_pos_ctrl <- function(x) {
 }
 `%||%` <- function(a,b) if (!is.null(a) && length(a)>0) a else b
 
+halfmax_fwhm <- function(x,
+                         Y,                      # numeric vector (one trace) OR data.frame/matrix (multiple columns)
+                         series_names = NULL,   # optional names for columns of Y
+                         spar_signal = 0.35,    # smoothing strength (0.25???0.55 typical)
+                         peak_min_sep_deg = 0.8,# min separation between peaks (??C)
+                         rel_prom = 0.05        # keep peaks with prominence >= rel_prom * signal range
+) {
+  # -- coerce Y to matrix; remember series names
+  if (is.vector(Y)) {
+    Y <- matrix(Y, ncol = 1)
+    if (is.null(series_names)) series_names <- "y"
+  } else {
+    Y <- as.matrix(Y)
+    if (is.null(series_names)) {
+      series_names <- colnames(Y)
+      if (is.null(series_names)) series_names <- paste0("y", seq_len(ncol(Y)))
+    }
+  }
+  
+  # -- clean & order x once
+  stopifnot(length(x) == nrow(Y))
+  ok <- is.finite(x)
+  x  <- x[ok]; Y <- Y[ok, , drop = FALSE]
+  o  <- order(x); x <- x[o]; Y <- Y[o, , drop = FALSE]
+  
+  # -- collapse duplicate x by averaging (helps smooth.spline)
+  if (any(duplicated(x))) {
+    agg_once <- function(y) tapply(y, INDEX = x, FUN = mean)
+    xu <- sort(unique(x))
+    Yc <- sapply(seq_len(ncol(Y)), function(j) as.numeric(agg_once(Y[, j])))
+    colnames(Yc) <- series_names
+    x <- xu; Y <- Yc
+  }
+  
+  n <- length(x)
+  if (n < 5) return(data.frame())
+  
+  # helper: smooth one vector
+  smooth_vec <- function(xx, yy, spar) stats::predict(stats::smooth.spline(xx, yy, spar = spar), xx)$y
+  
+  # helper: candidate peaks (indices where slope sign + -> - )
+  local_maxima <- function(ys) {
+    dy  <- diff(ys)
+    sgn <- sign(dy); sgn[sgn == 0] <- NA
+    which(head(sgn, -1) > 0 & tail(sgn, -1) < 0) + 1
+  }
+  
+  # helper: nearest minima (shoulders) around peak i on ys
+  shoulders_lr <- function(ys, i) {
+    # walk left to a local minimum (slope - -> +)
+    l <- i
+    while (l > 2 && ys[l-1] > ys[l]) l <- l - 1
+    while (l > 2 && ys[l-1] < ys[l]) l <- l - 1
+    # walk right to a local minimum
+    r <- i
+    while (r < n-1 && ys[r+1] > ys[r]) r <- r + 1
+    while (r < n-1 && ys[r+1] < ys[r]) r <- r + 1
+    c(max(1, l), min(n, r))
+  }
+  
+  # helper: linear crossing between indices j and j+1 for target level
+  interp_cross <- function(xv, yv, level, j) {
+    a <- yv[j]; b <- yv[j+1]
+    if (is.na(a) || is.na(b)) return(NA_real_)
+    if ((a - level) * (b - level) > 0) return(NA_real_)
+    t <- if (b == a) 0 else (level - a) / (b - a)
+    xv[j] + t * (xv[j+1] - xv[j])
+  }
+  
+  # ??C -> approx index distance
+  idx_per_deg <- mean(diff(seq_len(n)) / diff(x))
+  min_dist    <- max(1L, floor(peak_min_sep_deg * idx_per_deg))
+  
+  out <- list()
+  
+  for (j in seq_len(ncol(Y))) {
+    y  <- Y[, j]
+    ok <- is.finite(y)
+    if (!any(ok)) next
+    ys <- smooth_vec(x, y, spar = spar_signal)
+    
+    # auto absolute prominence threshold from this trace's dynamic range
+    prom_abs <- rel_prom * (max(ys, na.rm = TRUE) - min(ys, na.rm = TRUE))
+    
+    cand <- local_maxima(ys)
+    if (!length(cand)) next
+    
+    # greedy keep with min separation
+    kept <- integer(0)
+    for (i in cand) {
+      if (!length(kept) || (i - kept[length(kept)] >= min_dist)) kept <- c(kept, i)
+    }
+    
+    for (pi in kept) {
+      sh <- shoulders_lr(ys, pi)
+      li <- sh[1]; ri <- sh[2]
+      base <- min(ys[li], ys[ri])
+      height <- ys[pi] - base
+      if (!is.finite(height) || height < prom_abs) next
+      
+      half <- base + height / 2
+      
+      # left crossing: search from pi-1 down to li
+      xl <- NA_real_
+      for (jj in seq(pi - 1L, li, by = -1L)) {
+        xl <- interp_cross(x, ys, half, jj)
+        if (is.finite(xl)) break
+      }
+      
+      # right crossing: search from pi to ri-1
+      xr <- NA_real_
+      for (jj in seq(pi, ri - 1L)) {
+        xr <- interp_cross(x, ys, half, jj)
+        if (is.finite(xr)) break
+      }
+      
+      out[[length(out) + 1L]] <- data.frame(
+        series              = series_names[j],
+        peak_index          = pi,
+        peak_T              = x[pi],
+        peak_value_smooth   = ys[pi],
+        left_shoulder_T     = x[li],
+        left_shoulder_value = ys[li],
+        right_shoulder_T    = x[ri],
+        right_shoulder_value= ys[ri],
+        baseline_min        = base,
+        half_height_level   = half,
+        left_half_T         = xl,
+        right_half_T        = xr,
+        FWHM                = if (is.finite(xl) && is.finite(xr)) xr - xl else NA_real_,
+        prominence_est      = height,
+        stringsAsFactors    = FALSE
+      )
+    }
+  }
+  
+  if (!length(out)) data.frame() else do.call(rbind, out)
+}
+detect_peaks_2nd_roi <- function(
+    x, y,
+    roi_min = 60, roi_max = 70,     # hard window; nothing outside can be detected
+    spar_signal = 0.35,             # smoothing (0.30???0.55 typical)
+    rel_curv_thresh = 0.18,         # keep minima with |d2| >= rel * max(|d2|) in ROI
+    abs_curv_thresh = NA,           # or set an absolute threshold; NA = auto via rel
+    merge_close_deg = 1.0,          # merge minima/refined Tm closer than this
+    min_sep_deg = 1.2,              # final required separation for calling "double"
+    refine_zero_window_deg = 1.5,   # ????C search around curvature min for dy=0
+    max_peaks = 2                   # cap number of peaks reported
+){
+  stopifnot(length(x) == length(y))
+  ok <- is.finite(x) & is.finite(y)
+  x <- x[ok]; y <- y[ok]
+  o <- order(x); x <- x[o]; y <- y[o]
+  
+  # --- ROI gating
+  m <- x >= roi_min & x <= roi_max
+  if (!any(m)) return(list(class="none_in_roi", peaks_T=numeric(0),
+                           details=data.frame()))
+  xw <- x[m]; yw <- y[m]
+  if (length(xw) < 5) return(list(class="insufficient_data", peaks_T=numeric(0),
+                                  details=data.frame()))
+  
+  # --- smooth + derivatives
+  ys <- predict(smooth.spline(xw, yw, spar = spar_signal), xw)$y
+  sf  <- splinefun(xw, ys, method = "natural")
+  dy  <- sf(xw, deriv = 1)
+  d2y <- sf(xw, deriv = 2)
+  
+  # --- candidate curvature minima inside ROI (strictly negative lobes)
+  n <- length(xw)
+  idx_min <- which(d2y[-c(1,n)] < d2y[-c(1,2)] & d2y[-c(n-1,n)] < d2y[-c(1,n-1)]) + 1L
+  if (!length(idx_min)) {
+    # fallback: main apex within ROI
+    pi <- which.max(ys)
+    return(list(class="single", peaks_T=xw[pi],
+                details=data.frame(Tm=xw[pi], d2=d2y[pi], source="apex")))
+  }
+  
+  # --- magnitude threshold
+  if (is.na(abs_curv_thresh)) abs_curv_thresh <- rel_curv_thresh * max(abs(d2y), na.rm=TRUE)
+  cand <- idx_min[d2y[idx_min] <= -abs_curv_thresh]
+  if (!length(cand)) {
+    pi <- which.max(ys)
+    return(list(class="single", peaks_T=xw[pi],
+                details=data.frame(Tm=xw[pi], d2=d2y[pi], source="apex")))
+  }
+  
+  # helper: ??C -> indices
+  idx_per_deg <- mean(diff(seq_len(n)) / diff(xw))
+  to_idx <- function(deg) max(1L, floor(deg * idx_per_deg))
+  
+  # --- refine each min to a nearby dy==0 (true apex) if present
+  refine_to_zero <- function(i){
+    rng <- which(abs(xw - xw[i]) <= refine_zero_window_deg)
+    if (length(rng) < 3) return(i)
+    s <- sign(dy[rng]); s[s==0] <- NA
+    zc <- which(head(s,-1) > 0 & tail(s,-1) < 0)  # + to -
+    if (!length(zc)) return(i)
+    j <- rng[zc[1]]
+    a <- dy[j]; b <- dy[j+1]
+    t <- if (b == a) 0 else -a/(b-a)
+    x_ref <- xw[j] + t*(xw[j+1]-xw[j])
+    which.min(abs(xw - x_ref))
+  }
+  refined <- vapply(cand, refine_to_zero, 1L)
+  
+  # --- merge close-by candidates (by temperature distance), keep stronger (more -d2)
+  merge_idx <- to_idx(merge_close_deg)
+  keep <- logical(length(refined)); keep[] <- TRUE
+  ord  <- order(d2y[refined])  # most negative first
+  chosen <- integer(0)
+  for (k in ord) {
+    if (!keep[k]) next
+    i <- refined[k]
+    chosen <- c(chosen, i)
+    # suppress neighbors within merge window
+    close <- which(abs(refined - i) < merge_idx)
+    keep[close] <- FALSE
+    keep[k] <- TRUE
+  }
+  refined <- sort(unique(chosen))
+  
+  # --- enforce final separation
+  sep_idx <- to_idx(min_sep_deg)
+  final <- integer(0)
+  for (i in refined) {
+    if (!length(final) || all(abs(i - final) >= sep_idx)) final <- c(final, i)
+  }
+  
+  # limit to max_peaks (prefer strongest curvature)
+  if (length(final) > max_peaks) {
+    ord <- order(d2y[final])  # most negative first
+    final <- final[ord][seq_len(max_peaks)]
+    final <- sort(final)
+  }
+  
+  # if nothing left, fall back to apex in ROI
+  if (!length(final)) {
+    pi <- which.max(ys)
+    return(list(class="single", peaks_T=xw[pi],
+                details=data.frame(Tm=xw[pi], d2=d2y[pi], source="apex")))
+  }
+  
+  class <- if (length(final) >= 2) "double" else "single"
+  det <- data.frame(Tm = xw[final], d2 = d2y[final], source = "2nd-deriv")
+  
+  # ensure ROI apex present for reference
+  main_idx <- which.max(ys)
+  if (!any(abs(det$Tm - xw[main_idx]) < 1e-6)) {
+    det <- rbind(det, data.frame(Tm=xw[main_idx], d2=d2y[main_idx], source="apex"))
+  }
+  det <- det[order(det$Tm), ]
+  
+  list(class=class, peaks_T=det$Tm, details=det)
+}
 ##main biorad cvd analysis function
 
 cvd_all_in_one__v2 <- function(input_dir){
@@ -238,7 +493,8 @@ cvd_all_in_one__v2 <- function(input_dir){
     all_peak <- c()
     min_dips <- c()
     max_dips <- c()
-    result_tb_pai <- data.frame(row.names = colnames(pai_data)[2:ncol(pai_data)], min_dips = c(2:ncol(pai_data)), max_dips = c(2:ncol(pai_data)), peak_1 = c(2:ncol(pai_data)), Tm = c(2:ncol(pai_data)), patient = c(2:ncol(pai_data)), genotype = c(2:ncol(pai_data)))
+    FWHM <- c()
+    result_tb_pai <- data.frame(row.names = colnames(pai_data)[2:ncol(pai_data)], min_dips = c(2:ncol(pai_data)), max_dips = c(2:ncol(pai_data)), peak_1 = c(2:ncol(pai_data)), FWHM = c(2:ncol(pai_data)), patient = c(2:ncol(pai_data)), genotype = c(2:ncol(pai_data)))
     for (i in 1:nrow(result_tb_pai)) {
       for (j in 1:nrow(well_info_pai)) {
         if (rownames(result_tb_pai)[i] == well_info_pai$Well[j]) {
@@ -251,23 +507,15 @@ cvd_all_in_one__v2 <- function(input_dir){
         min_dips <- c(min_dips, NA)
         max_dips <- c(max_dips, NA)
       } else {
-        min_dips <- c(min_dips, min(pai_data[which(pai_data[,i] > max(pai_data[,i]/2)),1]))
-        max_dips <- c(max_dips, max(pai_data[which(pai_data[,i] > max(pai_data[,i]/2)),1]))
+        dips_fwhm <- halfmax_fwhm(pai_data[,1], pai_data[,i], spar_signal = 0.35, peak_min_sep_deg = 0.8, rel_prom = 0.05)
+        min_dips <- c(min_dips, dips_fwhm$left_half_T)
+        max_dips <- c(max_dips, dips_fwhm$right_half_T)
+        FWHM <- c(FWHM, dips_fwhm$FWHM)
       }
-      for (j in 1:nrow(pai_data)) {
-        if (j > 1 && j < nrow(pai_data)) {
-          if (pai_data[j+1,i] < pai_data[j,i] && pai_data[j-1,i] < pai_data[j,i]) {
-            all_peak <- c(all_peak,pai_data[j,i])
-          }
-        }
-      }
-      true_peak_rfu <- sort(all_peak, decreasing = TRUE)
-      #result_tb_pai$peak_1[i-1] <- true_peak_rfu[1]
-      all_peak <- c()
-      true_peak_rfu <- c()
     }
     result_tb_pai$min_dips <- min_dips
     result_tb_pai$max_dips <- max_dips
+    result_tb_pai$FWHM <- FWHM
     for (i in 1:nrow(result_tb_pai)) {
       if ("NTC" %in% well_info_pai$Content[which(well_info_pai$Well %in% rownames(result_tb_pai)[i])]){
         result_tb_pai$genotype[i] <- "NTC"
@@ -292,11 +540,11 @@ cvd_all_in_one__v2 <- function(input_dir){
         result_tb_pai$genotype[i] <- "No Peaks Detected within the Boundaries."
         next
       }
-      if (result_tb_pai$min_dips[i] < result_tb_pai[reference_pai_well,1]+1 && result_tb_pai$max_dips[i] > result_tb_pai[reference_pai_well,2]-1) {
+      if (result_tb_pai$FWHM[i] > (result_tb_pai[reference_pai_well, "FWHM"]-1.25) ) {
         result_tb_pai$genotype[i] <- "4G-5G"
-      } else if (result_tb_pai$min_dips[i] < result_tb_pai[reference_pai_well,1]+1 && result_tb_pai$max_dips[i] < result_tb_pai[reference_pai_well,2]-1){
+      } else if (result_tb_pai$max_dips[i] < result_tb_pai[reference_pai_well,2]-0.75){
         result_tb_pai$genotype[i] <- "5G-5G"
-      } else if (result_tb_pai$min_dips[i] > result_tb_pai[reference_pai_well,1]+1 && result_tb_pai$max_dips[i] > result_tb_pai[reference_pai_well,2]-1){
+      } else if (result_tb_pai$min_dips[i] > result_tb_pai[reference_pai_well,1]+1){
         result_tb_pai$genotype[i] <- "4G-4G"
       }
       
@@ -387,14 +635,18 @@ cvd_all_in_one__v2 <- function(input_dir){
           result_tb_list_11[[i]]$Tm[j] <- NA
           next
         }
-        if (is.na(result_tb_list_11[[i]]$peak_2[j]) && names(result_tb_list_11)[i] %!in% c("HPAI", "FV-LEI", "FII")) {
+        if (is.na(result_tb_list_11[[i]]$peak_2[j]) && names(result_tb_list_11)[i] %!in% c("HPAI", "FV-LEI", "FII", "FV CAMB")) {
           
           result_tb_list_11[[i]]$Tm[j] <- as.numeric(data_list_11[[names(result_tb_list_11[i])]][which(data_list_11[[names(result_tb_list_11[i])]][,j+1] %in% result_tb_list_11[[i]]$peak_1),1])
           
           
         } else if (is.na(result_tb_list_11[[i]]$peak_2[j]) == TRUE && names(result_tb_list_11)[i] == "HPAI"){
-          
-          if(result_tb_list_11[[i]]$min_dips[j] < hpai_melt[1] && result_tb_list_11[[i]]$max_dips[j] > hpai_melt[2]) {
+          second_peak <- detect_peaks_2nd_roi(hpai_data[,1],
+                                              hpai_data[,j+1],
+                                              roi_min = hpai_melt[1]-2,
+                                              roi_max = hpai_melt[2]+2,
+                                              merge_close_deg = 2.5, max_peaks = 2)
+          if(second_peak$class == "double") {
             
             result_tb_list_11[[i]]$genotype[j] <- "Heterozygous"
             
@@ -405,19 +657,42 @@ cvd_all_in_one__v2 <- function(input_dir){
           }
           
         } else if(is.na(result_tb_list_11[[i]]$peak_2[j]) == TRUE && names(result_tb_list_11)[i] == "FV-LEI"){
-          
-          if(result_tb_list_11[[i]]$min_dips[j] < fv_melt[1] && result_tb_list_11[[i]]$max_dips[j] > fv_melt[2]) {
+          second_peak <- detect_peaks_2nd_roi(fv_data[,1],
+                                              fv_data[,j+1],
+                                              roi_min = fv_melt[1]-2,
+                                              roi_max = fv_melt[2]+2,
+                                              merge_close_deg = 2.5, max_peaks = 2)
+          if(second_peak$class == "double") {
             
             result_tb_list_11[[i]]$genotype[j] <- "Heterozygous"
-            
+            second_peak <- c()
           } else {
             
             result_tb_list_11[[i]]$Tm[j] <- data_list_11[[names(result_tb_list_11[i])]][which(data_list_11[[names(result_tb_list_11[i])]][,j+1] %in% result_tb_list_11[[i]]$peak_1),1]
-            
+            second_peak <- c()
           }
         } else if(is.na(result_tb_list_11[[i]]$peak_2[j]) == TRUE && names(result_tb_list_11)[i] == "FII"){
-          
-          if(result_tb_list_11[[i]]$min_dips[j] < fii_melt[1]+1 && result_tb_list_11[[i]]$max_dips[j] > fii_melt[2]) {
+          second_peak <- detect_peaks_2nd_roi(fii_data[,1],
+                                              fii_data[,j+1],
+                                              roi_min = fii_melt[1]-2,
+                                              roi_max = fii_melt[2]+2,
+                                              merge_close_deg = 2.5, max_peaks = 2)
+          if(second_peak$class == "double") {
+            
+            result_tb_list_11[[i]]$genotype[j] <- "Heterozygous"
+            second_peak <- c()
+          } else {
+            
+            result_tb_list_11[[i]]$Tm[j] <- data_list_11[[names(result_tb_list_11[i])]][which(data_list_11[[names(result_tb_list_11[i])]][,j+1] %in% result_tb_list_11[[i]]$peak_1),1]
+            second_peak <- c()
+          }
+        }  else if(is.na(result_tb_list_11[[i]]$peak_2[j]) == TRUE && names(result_tb_list_11)[i] == "FXIII"){
+          second_peak <- detect_peaks_2nd_roi(fxiii_data[,1],
+                                              fxiii_data[,j+1],
+                                              roi_min = fxiii_melt[1]-2,
+                                              roi_max = fxiii_melt[2]+2,
+                                              merge_close_deg = 2.5, max_peaks = 2)
+          if(second_peak$class == "double") {
             
             result_tb_list_11[[i]]$genotype[j] <- "Heterozygous"
             
@@ -426,10 +701,18 @@ cvd_all_in_one__v2 <- function(input_dir){
             result_tb_list_11[[i]]$Tm[j] <- data_list_11[[names(result_tb_list_11[i])]][which(data_list_11[[names(result_tb_list_11[i])]][,j+1] %in% result_tb_list_11[[i]]$peak_1),1]
             
           }
-        } else if(is.na(result_tb_list_11[[i]]$peak_2[j]) && names(result_tb_list_11)[i] == "A1298C"){
-          
-          if(result_tb_list_11[[i]]$min_dips[j] < a1298_melt[1] && result_tb_list_11[[i]]$max_dips[j] > a1298_melt[2]){
+        } else if(is.na(result_tb_list_11[[i]]$peak_2[j]) == TRUE && names(result_tb_list_11)[i] == "FV CAMB"){
+          second_peak <- detect_peaks_2nd_roi(fvcamb_data[,1], 
+                                              fvcamb_data[,j+1], 
+                                              roi_min = fvcamb_melt[1]-2, roi_max = fvcamb_melt[2]+2,
+                                              merge_close_deg = 2.5, max_peaks = 2)
+          if(second_peak$class == "double") {
+            
             result_tb_list_11[[i]]$genotype[j] <- "Heterozygous"
+            
+          } else {
+            
+            result_tb_list_11[[i]]$Tm[j] <- data_list_11[[names(result_tb_list_11[i])]][which(data_list_11[[names(result_tb_list_11[i])]][,j+1] %in% result_tb_list_11[[i]]$peak_1),1]
           }
         } else {
           result_tb_list_11[[i]]$genotype[j] <- "Heterozygous"
