@@ -30,7 +30,7 @@ fmf_panel_v1 <- function(input_dir){
   }
   fmf_mix_all <- list(
     FMFM1 = c("R761H", "E148Q"),
-    FMFM2 = c("F479L", "P408Q"),
+    FMFM2 = c("F479L", "R408Q"),
     FMFM3 = c("V726A", "P369S"),
     FMFM4 = c("M680I", "M694V"),
     FMFM5 = c("A744S", "E167D")
@@ -96,7 +96,7 @@ fmf_panel_v1 <- function(input_dir){
   
   r761h_data <- as.data.frame(cy5_data[,c("Temperature",well_info[grep(pattern = "\\bR761H\\b", x = well_info$Target, ignore.case = TRUE),"Well"])])
   e148q_data <- as.data.frame(rox_data[,c("Temperature", well_info[grep(pattern = "\\bE148Q\\b", x = well_info$Target), "Well"])])
-  p408q_data <- as.data.frame(cy5_data[,c("Temperature", well_info[grep(pattern = "\\bP408Q\\b", x = well_info$Target), "Well"])])
+  R408Q_data <- as.data.frame(cy5_data[,c("Temperature", well_info[grep(pattern = "\\bR408Q\\b", x = well_info$Target), "Well"])])
   f479l_data <- as.data.frame(rox_data[,c("Temperature", well_info[grep(pattern = "\\bF479L\\b", x = well_info$Target), "Well"])])
   v726a_data <- as.data.frame(rox_data[,c("Temperature", well_info[grep(pattern = "\\bV726A\\b", x = well_info$Target, ignore.case = TRUE), "Well"])])
   p369s_data <- as.data.frame(cy5_data[,c("Temperature", well_info[grep(pattern = "\\bP369S\\b", well_info$Target, ignore.case = TRUE), "Well"])])
@@ -107,9 +107,9 @@ fmf_panel_v1 <- function(input_dir){
   
   #data list for all fmf parameters
   
-  data_list_all <- list(R761H = r761h_data, E148Q = e148q_data, P408Q = p408q_data, F479L = f479l_data, V726A = v726a_data, P369S = p369s_data, M694V = m694v_data,
+  data_list_all <- list(R761H = r761h_data, E148Q = e148q_data, R408Q = R408Q_data, F479L = f479l_data, V726A = v726a_data, P369S = p369s_data, M694V = m694v_data,
                         M680I = m680i_data, E167D = e167d_data, A744S = a744s_data)
-  data_list_graph <- list(R761H = r761h_data, E148Q = e148q_data, P408Q = p408q_data, F479L = f479l_data, V726A = v726a_data, P369S = p369s_data, M694V = m694v_data,
+  data_list_graph <- list(R761H = r761h_data, E148Q = e148q_data, R408Q = R408Q_data, F479L = f479l_data, V726A = v726a_data, P369S = p369s_data, M694V = m694v_data,
                           M680I = m680i_data, E167D = e167d_data, A744S = a744s_data)
   
   #melting temperatures for all fmf parameters
@@ -118,7 +118,7 @@ fmf_panel_v1 <- function(input_dir){
   e148v_melt <- c(66.9,72.6)
   r761h_melt <- c(53.7, 64)
   f479l_melt <- c(55,62)
-  p408q_melt <- c(60,70.5)
+  R408Q_melt <- c(60,70.5)
   p369s_melt <- c(57,62.7)
   v726a_melt <- c(59.7, 64.5)
   m694v_melt <- c(58,64.2)
@@ -134,7 +134,7 @@ fmf_panel_v1 <- function(input_dir){
     E148V = e148v_melt,
     R761H = r761h_melt,
     F479L = f479l_melt,
-    P408Q = p408q_melt,
+    R408Q = R408Q_melt,
     P369S = p369s_melt,
     V726A = v726a_melt,
     M694V = m694v_melt,
@@ -148,7 +148,7 @@ fmf_panel_v1 <- function(input_dir){
   
   # Define the list of patterns
   patterns <- c(
-    "E148Q", "R761H", "F479L", "P408Q", "P369S", "V726A", "M694V",
+    "E148Q", "R761H", "F479L", "R408Q", "P369S", "V726A", "M694V",
       "M680I", "E167D", "A744S"
   )
   

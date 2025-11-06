@@ -1037,7 +1037,7 @@ server <- function(input, output, session) {
       "FV-LEI" = "blue", "FII" = "green", "A1298C" = "purple", "PAI" = "purple",
       "HPAI" = "purple", "FV CAMB" = "purple", "FV-CAMB" = "purple", "ACE" = "purple", "APOE1" = "orange",
       "APOE2" = "purple", "C677T" = "orange", "FXIII" = "orange", "FGB" = "orange",
-      "APOB" = "orange", "LTA" = "orange", 
+      "APOB" = "orange", "LTA" = "orange", "H1299R" = "orange",
       "E148Q" = "orange", "R761H" = "purple", 
       "F479L" = "orange", "P408Q" = "purple", 
       "V726A" = "orange", "P369S" = "purple", 
@@ -1132,7 +1132,7 @@ server <- function(input, output, session) {
     # Your exact desired order
     desired_order <- c(
       "FV-LEI", "FII", "A1298C", "C677T", "PAI", "FXIII", "HPAI",
-      "FGB", "FV CAMB", "APOB", "ACE", "LTA", "APOE",
+      "FGB", "FV CAMB", "APOB","H1299R", "ACE", "LTA", "APOE",
       "E148Q", "R761H", "F479L", "P408Q", "V726A",
       "P369S", "M694V", "M680I", "A744S", "E167D"
     )
@@ -1160,7 +1160,7 @@ server <- function(input, output, session) {
     filtered_res <- res[ ! res$Parameter %in% c("APOE1","APOE2"), ]
     desired_order <- c(
       "FV-LEI","FII","A1298C","C677T","PAI","FXIII","HPAI",
-      "FGB","FV CAMB","APOB","ACE","LTA","APOE",
+      "FGB","FV CAMB","APOB", "H1299R", "ACE","LTA","APOE",
       "E148Q","R761H","F479L","P408Q","V726A",
       "P369S","M694V","M680I","A744S","E167D"
     )
