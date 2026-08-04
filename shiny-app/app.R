@@ -10,7 +10,7 @@ library(writexl) # For .xlsx outputs
 library(openxlsx) # For writing the complete table into the first sheet
 library(ggplot2)# For Graphs
 library(readxl)
-
+library(plotly)
 
 source("cvd_all_in_one__v2.R")
 source("generate_well_names.R")
@@ -168,12 +168,61 @@ ui <- dashboardPage(
           });
         }
       });
-    "))
+    ")),
+    hr(),
+    
+    h4("4. Support"),
+    
+    actionButton(
+      "check_updates",
+      HTML('
+        <svg aria-hidden="true" focusable="false" data-prefix="fas" data-icon="cloud-arrow-down"
+             class="svg-inline--fa fa-cloud-arrow-down" role="img"
+             xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 512"
+             style="fill: currentColor; width: 18px; height: 18px;">
+          <path d="M537.6 226.6C529.3 160.8 472.6 112 405.3 112c-41.3 0-79.1 18.5-104.3 48.4
+                   c-7.4-1.6-15.1-2.4-23-2.4c-53 0-96 43-96 96
+                   c0 6.9 .8 13.6 2.2 20.1C133.6 282.8 96 323.7 96 373.3
+                   C96 426.6 138.7 469.3 192 469.3H512
+                   c53 0 96-43 96-96
+                   c0-46.1-32.6-84.6-70.4-96.7zM320 304
+                   l-64-64h48V160h32v80h48l-64 64z"/>
+        </svg>
+        Check for Updates'
+      )
+    ),
+    
+    actionButton(
+      "open_help",
+      HTML('
+        <svg aria-hidden="true" focusable="false" data-prefix="fas" data-icon="circle-question"
+             class="svg-inline--fa fa-circle-question" role="img"
+             xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"
+             style="fill: currentColor; width: 18px; height: 18px;">
+          <path d="M256 8C119 8 8 119 8 256s111 248 248 248
+                   s248-111 248-248S393 8 256 8zm0 110
+                   c23.2 0 42 18.8 42 42
+                   c0 16.4-9.6 30.5-23.5 37.2
+                   c-12.7 6.2-18.5 14.5-18.5 28.8v6h-32v-6
+                   c0-25.1 11.6-41.1 33.1-52.2
+                   c6.9-3.6 8.9-7.1 8.9-12.8
+                   c0-8.8-7.2-16-16-16
+                   s-16 7.2-16 16H208
+                   c0-23.2 18.8-42 48-42zm0 238
+                   c-13.3 0-24-10.7-24-24
+                   s10.7-24 24-24
+                   s24 10.7 24 24
+                   s-10.7 24-24 24z"/>
+        </svg>
+        User Guide'
+      )
+    )
+    
   ),
   
   dashboardBody(
     shinyjs::useShinyjs(),
-    
+  
     # Split.js + helper script
     tags$head(
       tags$script(src = "split.min.js"),
@@ -187,6 +236,140 @@ ui <- dashboardPage(
         });
       "))
     ),
+    
+    # NEW: drag-select wells as a rectangle on the plate, path-based on rotor
+    tags$script(HTML("
+      (function() {
+        let dragging = false;
+        let dragWells = new Set();
+        let dragMode = null;       // 'add' or 'remove'
+        let dragTargetType = null; // 'plate' or 'rotor'
+        let startRow = null;
+        let startCol = null;
+
+        function getPlateWell(el) {
+          return el ? el.closest('.well-button') : null;
+        }
+        function getRotorWell(el) {
+          return el ? el.closest('g[data-well]') : null;
+        }
+
+        function addRotorWellFromElement(el) {
+          const rotorWell = getRotorWell(el);
+          if (!rotorWell) return;
+          const w = rotorWell.getAttribute('data-well');
+          if (w) dragWells.add(w);
+        }
+
+        // Start drag if mousedown begins on any well
+        document.addEventListener('mousedown', function(e) {
+          const plateWell = getPlateWell(e.target);
+          const rotorWell = getRotorWell(e.target);
+          if (!plateWell && !rotorWell) return;
+
+          dragging = true;
+          dragWells = new Set();
+
+          let startingSelected = false;
+
+          if (plateWell) {
+            dragTargetType = 'plate';
+
+            // starting well id: 'A1', 'H12', ...
+            const id = plateWell.id || '';
+            const m = id.match(/^well_(.+)$/);
+            if (m && m[1]) {
+              dragWells.add(m[1]);
+            }
+
+            // store starting plate coordinates
+            startRow = parseInt(plateWell.dataset.row, 10);
+            startCol = parseInt(plateWell.dataset.col, 10);
+
+            if (plateWell.classList.contains('well-selected')) {
+              startingSelected = true;
+            }
+
+          } else if (rotorWell) {
+            dragTargetType = 'rotor';
+
+            addRotorWellFromElement(rotorWell);
+
+            if (rotorWell.classList.contains('rg-selected')) {
+              startingSelected = true;
+            }
+          }
+
+          dragMode = startingSelected ? 'remove' : 'add';
+        });
+
+        // While dragging, update the rectangle (plate) or path (rotor)
+        document.addEventListener('mousemove', function(e) {
+          if (!dragging) return;
+
+          const el = document.elementFromPoint(e.clientX, e.clientY);
+          if (!el) return;
+
+          if (dragTargetType === 'plate') {
+            const cell = getPlateWell(el);
+            if (!cell || !cell.dataset) return;
+
+            const row = parseInt(cell.dataset.row, 10);
+            const col = parseInt(cell.dataset.col, 10);
+            if (isNaN(row) || isNaN(col) || startRow === null || startCol === null) return;
+
+            const minRow = Math.min(startRow, row);
+            const maxRow = Math.max(startRow, row);
+            const minCol = Math.min(startCol, col);
+            const maxCol = Math.max(startCol, col);
+
+            // recompute set of wells in the current rectangle
+            dragWells = new Set();
+            const allCells = document.querySelectorAll('.well-button');
+
+            allCells.forEach(function(btn) {
+              const r = parseInt(btn.dataset.row, 10);
+              const c = parseInt(btn.dataset.col, 10);
+              if (isNaN(r) || isNaN(c)) return;
+
+              if (r >= minRow && r <= maxRow && c >= minCol && c <= maxCol) {
+                const id = btn.id || '';
+                const m = id.match(/^well_(.+)$/);
+                if (m && m[1]) dragWells.add(m[1]);
+              }
+            });
+
+          } else if (dragTargetType === 'rotor') {
+            // rotor: path-based (any well under the cursor is included)
+            addRotorWellFromElement(el);
+          }
+        });
+
+        // On mouseup, send all collected wells + mode once to Shiny
+        document.addEventListener('mouseup', function() {
+          if (!dragging) return;
+          dragging = false;
+
+          const wells = Array.from(dragWells);
+          if (wells.length && window.Shiny && Shiny.setInputValue) {
+            Shiny.setInputValue(
+              'drag_select_wells',
+              { wells: wells, mode: dragMode || 'add' },
+              { priority: 'event' }
+            );
+          }
+
+          dragWells = new Set();
+          dragMode = null;
+          dragTargetType = null;
+          startRow = null;
+          startCol = null;
+        });
+      })();
+    ")),
+    
+    
+    
     # --- Stack Shiny toasts neatly (top-right) ---
 
     
@@ -238,6 +421,7 @@ ui <- dashboardPage(
         width: 20px; height: 20px; border-radius: 50%;
         border: 1px solid #ccc; margin-right: 10px; flex-shrink: 0;
       }
+      
 
       /* Rotor-Gene circular view */
       .rotor-container { width: 100%; aspect-ratio: 1 / 1; }
@@ -273,6 +457,34 @@ ui <- dashboardPage(
         font-size: calc(1em + 0.2vw); white-space: nowrap;
       }
       .well-button:hover { background-color: #d0d0d0; border-color: #999; }
+     /* Selected wells (darker shades) */
+      .well-ntc.well-selected {
+        background-color: #90caf9;
+        border-color: #1e88e5;
+      }
+      .well-pos-ctrl.well-selected {
+        background-color: #a5d6a7;
+        border-color: #2e7d32;
+      }
+      .well-button-active.well-selected {
+        background-color: #b3e5fc;
+        border-color: #0277bd;
+      }
+
+      /* Rotor selected wells (darker fill/stroke) */
+      .rg-well.rg-ntc.rg-selected {
+        fill: #90caf9;
+        stroke: #1e88e5;
+      }
+      .rg-well.rg-pos.rg-selected {
+        fill: #a5d6a7;
+        stroke: #2e7d32;
+      }
+      .rg-well.rg-sample.rg-selected {
+        fill: #b3e5fc;
+        stroke: #0277bd;
+      }
+
 
       /* Genotype colors */
       .well-ntc       { background-color: #bbdefb; border-color: #64b5f6; }
@@ -302,14 +514,23 @@ ui <- dashboardPage(
               h4("Melting Curve Plots:"),
               p("Click on a well in the 96-well plate to see its combined melting curve plot.")
             ),
-            plotOutput("combined_well_plot", height = "250px")
+            plotlyOutput("combined_well_plot", height = "350px"),
+            br(),
+            checkboxGroupInput(
+              "channel_filter",
+              "Show Channels:",
+              choices = c("FAM", "HEX", "ROX", "Cy5"),
+              selected = c("FAM", "HEX", "ROX", "Cy5"),
+              inline = TRUE
+            )
           )
         )
       ),
       div(
         id = "bottom-panel",
         h3("Analysis Results:"),
-        uiOutput("well_specific_results_ui"),
+        uiOutput("well_selector_ui"),
+        uiOutput("well_tabs_ui"),
         uiOutput("results_tabs")
       )
     ),
@@ -407,6 +628,30 @@ server <- function(input, output, session) {
   }
   
   
+  sanitize_id <- function(x) {
+    gsub("[^A-Za-z0-9_]", "_", x)
+  }
+  order_wells <- function(w) {
+    w <- unique(as.character(w))
+    if (!length(w)) return(w)
+    
+    # Rotor wells: w1, w2, ..., w72
+    if (all(grepl("^w\\d+$", w))) {
+      ord <- order(as.integer(sub("^w", "", w)))
+      return(w[ord])
+    }
+    
+    # Plate wells: A1..H12
+    if (all(grepl("^[A-H][0-9]{1,2}$", w))) {
+      rows <- match(substr(w, 1, 1), LETTERS)
+      cols <- as.integer(sub("^[A-H]", "", w))
+      ord  <- order(rows, cols)
+      return(w[ord])
+    }
+    
+    # Fallback: plain sort
+    sort(w)
+  }
   
   strip_w <- function(x) sub("^w(?=\\d+$)", "", x, perl = TRUE)
   display_well <- function(x) ifelse(grepl("^w\\d+$", x), strip_w(x), x)
@@ -418,6 +663,115 @@ server <- function(input, output, session) {
       TRUE ~ x
     )
   }
+  # --- Parameter groups & display names & genotype labels ---
+  
+  # Internal CVD/FM parameter lists (by internal names)
+  cvd_params <- c(
+    "FII", "FV-LEI", "C677T", "A1298C", "PAI", "FXIII",
+    "HPAI", "FGB", "FV CAMB", "APOB", "H1299R", "ACE", "LTA", "APOE"
+  )
+  
+  fmf_params <- c(
+    "E148Q", "R761H", "F479L", "P408Q", "V726A",
+    "P369S", "M694V", "M680I", "A744S", "E167D"
+  )
+  param_channel <- function(p) {
+    p <- as.character(p)
+    ch <- rep(NA_character_, length(p))
+    
+    # FAM (blue)
+    ch[p %in% c("FV-LEI")] <- "FAM"
+    
+    # HEX (green)
+    ch[p %in% c("FII")] <- "HEX"
+    
+    # ROX (orange)
+    ch[p %in% c(
+      "C677T", "FXIII", "FGB", "APOB", "LTA", "H1299R", "APOE1",
+      "E148Q", "F479L", "V726A", "M694V", "A744S"
+    )] <- "ROX"
+    
+    # Cy5 (purple)
+    ch[p %in% c(
+      "A1298C", "PAI", "HPAI", "FV CAMB", "FV-CAMB", "ACE", "APOE2",
+      "R761H", "P408Q", "R408Q", "P369S", "M680I", "E167D"
+    )] <- "Cy5"
+    
+    ch
+  }
+  
+  
+  # Display label for parameters (for UI & Excel columns)
+  # Slashes replaced with dashes where it matters
+  param_display <- function(x) {
+    x <- as.character(x)
+    map <- c(
+      "FII"     = "FII / Protrombin (G20210A)",
+      "FV-LEI"  = "Factor V Leiden (G1691A)",
+      "C677T"   = "MTHFR (C677T)",
+      "A1298C"  = "MTHFR (A1298C)",
+      "PAI"     = "PAI (4G/5G)",
+      "FXIII"   = "Factor XIII (V34L)",
+      "HPAI"    = "HPAI (L33P)",
+      "FGB"     = "B-Fibrinogen (-455G-A)",
+      "FV CAMB" = "Factor V Cambridge (c.1001G>C)",
+      "APOB"    = "APOB (R3500Q)",
+      "ACE"     = "ACE (I/D)",
+      "LTA"     = "LTA (804 C>A)",
+      "H1299R"  = "H1299R (c.3980A>G)",
+      "E148Q"   = "E148Q - E148V"
+    )
+    m <- map[match(x, names(map))]
+    x[!is.na(m)] <- m[!is.na(m)]
+    x
+  }
+  
+  # Genotype display for summary / tables
+  # Handles PAI 4G/4G etc + generic homo/hetero/wild-type
+  geno_display <- function(x, param = NULL) {
+    y   <- trimws(as.character(x))
+    low <- tolower(y)
+    param <- if (is.null(param)) rep(NA_character_, length(y)) else as.character(param)
+    
+    # ---- Special handling for PAI (4G/4G, 4G/5G, 5G/5G) ----
+    is_pai <- grepl("^PAI", toupper(param))  # robust (PAI, PAI-1, etc.)
+    is_fmf <- toupper(param) %in% toupper(fmf_params)
+    y_norm <- gsub("\\s+", "", toupper(y))
+    
+    is_44 <- is_pai & y_norm %in% c("4G/4G", "4G-4G", "4G4G")
+    is_45 <- is_pai & y_norm %in% c("4G/5G", "4G-5G", "4G5G",
+                                    "5G/4G", "5G-4G", "5G4G")
+    is_55 <- is_pai & y_norm %in% c("5G/5G", "5G-5G", "5G5G")
+    
+    out <- y
+    out[is_44] <- "4G/4G"
+    out[is_45] <- "4G/5G"
+    out[is_55] <- "5G/5G"
+    
+    # ---- Generic mapping for the rest with FMF parameter skip ----
+    remaining <- !(is_44 | is_45 | is_55) & !is_fmf
+    if (any(remaining)) {
+      r_y   <- y[remaining]
+      r_low <- low[remaining]
+      
+      is_hetero <- grepl("hetero", r_low) | grepl("^het$", r_low)
+      is_homo   <- grepl("homo", r_low) | grepl("mut/mut", r_low)
+      is_wt     <- grepl("wild", r_low) | grepl("^wt$", r_low) | grepl("normal", r_low)
+      
+      r_out <- r_y
+      r_out[is_hetero] <- "Heterozygous"
+      r_out[is_homo]   <- "Homozygous Mutant"
+      r_out[is_wt]     <- "Wild-Type"
+      
+      out[is_fmf] <- y[is_fmf]
+      out[remaining] <- r_out
+    }
+    
+    out
+  }
+  
+  
+  
   safe_get <- function(x, nm, default = NA_character_) {
     if (is.null(x)) return(default)
     if (is.character(x) || is.list(x)) {
@@ -598,6 +952,176 @@ server <- function(input, output, session) {
   ##Reactive calue to store melting curve data
   melting_curves_data <- reactiveVal(NULL)
   
+  observeEvent(input$open_help, {
+    shinyjs::runjs(
+      "window.electronAPI.openExternal('https://www.octobio.tech/technology');"
+    )
+  })
+  
+  observeEvent(input$check_updates, {
+    showModal(modalDialog(
+      title = "Check for Updates",
+      p("Checking for updates..."),
+      tags$div(id = "upd_status", style="margin-top:10px; color:#555;", "Please wait."),
+      easyClose = TRUE,
+      footer = modalButton("Close")
+    ))
+    
+    shinyjs::runjs("
+    (async () => {
+      try {
+        const res = await window.electronAPI.checkForUpdates();
+        Shiny.setInputValue('upd_check_result', res, {priority:'event'});
+      } catch (e) {
+        Shiny.setInputValue('upd_check_result', { ok:false, message: String(e) }, {priority:'event'});
+      }
+    })();
+  ")
+  })
+  
+  observeEvent(input$upd_check_result, {
+    res <- input$upd_check_result
+    if (is.null(res) || !isTRUE(res$ok)) {
+      showModal(modalDialog(
+        title = "Update check failed",
+        p(res$message %||% "Unknown error."),
+        easyClose = TRUE,
+        footer = modalButton("Close")
+      ))
+      return()
+    }
+    
+    # electron-updater checkForUpdates() result structure:
+    # res$result$isUpdateAvailable (boolean)
+    # res$result$updateInfo$version (string)
+    has_update <- isTRUE(res$result$isUpdateAvailable)
+    new_ver    <- res$result$updateInfo$version %||% "(unknown)"
+    
+    if (!has_update) {
+      showModal(modalDialog(
+        title = "You're up to date",
+        p("No updates available."),
+        easyClose = TRUE,
+        footer = modalButton("Close")
+      ))
+      return()
+    }
+    
+    showModal(modalDialog(
+      title = "Update available",
+      p(paste0("A new version is available: ", new_ver)),
+      p("Would you like to download it now?"),
+      tags$br(),
+      footer = tagList(
+        modalButton("Later"),
+        actionButton("upd_download_now", "Download"),
+        actionButton("upd_open_download_page", "Open download page")
+      ),
+      easyClose = TRUE
+    ))
+  })
+  observeEvent(input$upd_open_download_page, {
+    shinyjs::runjs(
+      "window.electronAPI.openExternal('https://github.com/onurcansezginer0507/OctoClario-Updates/releases/latest');"
+    )
+    removeModal()
+  })
+  
+  observeEvent(input$upd_download_now, {
+    showModal(modalDialog(
+      title = "Downloading update",
+      p("Downloading... please wait."),
+      tags$div(id="upd_progress", style="margin-top:10px; font-family: monospace;", "0%"),
+      easyClose = FALSE,
+      footer = NULL
+    ))
+    
+    # Attach updater event listener once, then start download
+    shinyjs::runjs("
+    window.electronAPI.onUpdaterEvent((payload) => {
+      Shiny.setInputValue('upd_event', payload, {priority:'event'});
+    });
+
+    (async () => {
+      const res = await window.electronAPI.downloadUpdate();
+      Shiny.setInputValue('upd_download_started', res, {priority:'event'});
+    })();
+  ")
+  })
+  
+  observeEvent(input$upd_download_started, {
+    res <- input$upd_download_started
+    if (is.null(res) || !isTRUE(res$ok)) {
+      showModal(modalDialog(
+        title = "Download failed",
+        p(res$message %||% "Unknown error."),
+        easyClose = TRUE,
+        footer = modalButton("Close")
+      ))
+    }
+  })
+  
+  observeEvent(input$upd_event, {
+    ev <- input$upd_event
+    if (is.null(ev) || is.null(ev$type)) return()
+    
+    if (identical(ev$type, "progress")) {
+      pct <- ev$percent %||% NA
+      if (!is.na(pct)) {
+        shinyjs::runjs(sprintf(
+          "var el=document.getElementById('upd_progress'); if(el) el.textContent='%s%%';",
+          pct
+        ))
+      }
+    }
+    
+    if (identical(ev$type, "downloaded")) {
+      showModal(modalDialog(
+        title = "Update downloaded",
+        p("The update has been downloaded."),
+        p("Install now? (The app will restart)"),
+        footer = tagList(
+          modalButton("Later"),
+          actionButton("upd_install_now", "Install now")
+        ),
+        easyClose = TRUE
+      ))
+    }
+    
+    if (identical(ev$type, "error")) {
+      showModal(modalDialog(
+        title = "Updater error",
+        p(ev$message %||% "Unknown updater error."),
+        easyClose = TRUE,
+        footer = modalButton("Close")
+      ))
+    }
+  })
+  
+  observeEvent(input$upd_install_now, {
+    # No more UI needed: app should quit and install
+    shinyjs::runjs("
+    (async () => {
+      const res = await window.electronAPI.installUpdate();
+      Shiny.setInputValue('upd_install_result', res, {priority:'event'});
+    })();
+  ")
+  })
+  
+  observeEvent(input$upd_install_result, {
+    res <- input$upd_install_result
+    if (is.null(res) || !isTRUE(res$ok)) {
+      showModal(modalDialog(
+        title = "Install failed",
+        p(res$message %||% "Unknown error."),
+        easyClose = TRUE,
+        footer = modalButton("Close")
+      ))
+    }
+  })
+  
+  
+  
   # --- Initialize ONLY the Vertical Split.js instance once the UI is fully rendered ---
   observeEvent(session$onFlushed, {
     shinyjs::runjs("
@@ -635,6 +1159,27 @@ server <- function(input, output, session) {
   
   # Reactive value to store the analysis results
   analysis_output <- reactiveVal(NULL)
+  
+  selected_wells <- reactive({
+    input$selected_wells %||% character(0)
+  })
+  
+  
+  output$well_selector_ui <- renderUI({
+    df <- analysis_output()
+    req(df, nrow(df) > 0)
+    
+    wells <- order_wells(df$Well)  # <--- changed
+    
+    selectInput(
+      inputId  = "selected_wells",
+      label    = "Select wells (click in plate or use this list):",
+      choices  = stats::setNames(wells, display_well(wells)),
+      multiple = TRUE,
+      selectize = TRUE
+    )
+  })
+  
   
   # Reactive value to store well -> genotype mapping for coloring
   well_genotype_for_coloring <- reactiveVal(NULL)
@@ -833,7 +1378,13 @@ server <- function(input, output, session) {
       fmf_norm <- extract_results_plots(raw_fmf)
       all_results_list <- c(cvd_norm$results, fmf_norm$results)
       combined_df <- dplyr::bind_rows(all_results_list) %>% 
-        dplyr::mutate(Genotype = normalize_genotype(Genotype), Well = as.character(Well))
+        dplyr::mutate(Genotype = normalize_genotype(Genotype), Well = as.character(Well),  `Sample Name` = as.character(`Sample Name`),
+                      `Sample Name` = dplyr::if_else(
+                        is.na(`Sample Name`) | trimws(`Sample Name`) == "",
+                        display_well(Well),
+                        `Sample Name`,
+                        missing = Well
+                      ))
       analysis_output(combined_df)
       melting_curves_data(c(cvd_norm$plots, fmf_norm$plots))
     })
@@ -849,11 +1400,13 @@ server <- function(input, output, session) {
   
   # Render the 96-well plate UI
   output$well_plate_ui <- renderUI({
-      req(analysis_output()[[1]])                  # only draw after analysis (keeps things simple)
+      df <- analysis_output()
+      req(df, nrow(df) > 0)
       gm <- well_genotype_for_coloring()
       if (is.null(gm)) gm <- setNames(character(0), character(0))
       
       instr <- instrument_detected()               # "biorad" | "rotor36" | "rotor72"
+      sel <- selected_wells() 
       
     
     make_legend <- function(mode=c("plate","rotor")){
@@ -890,7 +1443,7 @@ server <- function(input, output, session) {
         th <- (a0 + (i-1)*step)*pi/180
         x <- cx + R*cos(th); y <- cy + R*sin(th)
         id <- ids[i]                      # e.g. "w17"
-        label <- sub("^w","", id)         # show "17" inside the circle
+        label <- sub("^w","", id)
         
         klass <- "rg-well "
         gv <- safe_get(gm, id)
@@ -907,6 +1460,10 @@ server <- function(input, output, session) {
           klass <- paste0(klass, "rg-empty")
         }
         
+        # ADD: mark rotor wells that are selected
+        if (id %in% sel) {
+          klass <- paste(klass, "rg-selected")
+        }
         
         tags$g(`data-well` = id,
                onclick = sprintf("Shiny.setInputValue('well_clicked','%s',{priority:'event'})", id),
@@ -916,6 +1473,7 @@ server <- function(input, output, session) {
                          `text-anchor`="middle", `dominant-baseline`="middle",
                          class="rg-label", label))
       })
+      
       
       return(
         div(class="well-plate-layout-container",
@@ -942,20 +1500,31 @@ server <- function(input, output, session) {
     wells <- lapply(seq_len(nrows), function(r){
       lapply(seq_len(ncols), function(c){
         well_id <- paste0(LETTERS[r], c)
-        cls <- if (well_id %in% names(gm)) {
+        base_cls <- if (well_id %in% names(gm)) {
           switch(gm[[well_id]],
-                 "NTC"="well-button well-ntc",
-                 "Pos Ctrl"="well-button well-pos-ctrl",
+                 "NTC"      = "well-button well-ntc",
+                 "Pos Ctrl" = "well-button well-pos-ctrl",
                  "well-button well-button-active")
         } else "well-button well-button-inactive"
+        
+        # Mark selected wells (darker color)
+        if (well_id %in% sel) {
+          base_cls <- paste(base_cls, "well-selected")
+        }
+        
         tags$button(
-          id=paste0("well_",well_id), class=cls,
-          style=sprintf("grid-column:%d; grid-row:%d;", c+1, r+1),
-          onclick=sprintf("Shiny.setInputValue('well_clicked','%s',{priority:'event'})", well_id),
+          id        = paste0("well_", well_id),
+          class     = base_cls,
+          `data-row`= r,                    # <--- NEW
+          `data-col`= c,                    # <--- NEW
+          style     = sprintf("grid-column:%d; grid-row:%d;", c+1, r+1),
+          onclick   = sprintf("Shiny.setInputValue('well_clicked','%s',{priority:'event'})", well_id),
           tags$span(well_id)
         )
       })
     }) %>% unlist(recursive = FALSE)
+    
+    
     
     div(class="well-plate-layout-container",
         div(class="well-plate-container",
@@ -969,116 +1538,195 @@ server <- function(input, output, session) {
   
   
   
-  # New: Hide the headers once a well is clicked and a plot is rendered
-  observeEvent(selected_well_from_click(), {
-    req(selected_well_from_click()) # Only run if a well is selected
-    shinyjs::hide("plot_headers")
-  }, ignoreNULL = TRUE)
+
   
   # Reactive expression to get unique wells for the dropdown
   # Reactive expression to store the currently selected well from a click
   selected_well_from_click <- reactiveVal(NULL)
+  observe({
+    wells <- selected_wells()
+    if (length(wells) > 0) {
+      shinyjs::hide("plot_headers")
+    } else {
+      shinyjs::show("plot_headers")
+    }
+  })
   
   # Observe the well click and store it in a reactive value
   observeEvent(input$well_clicked, {
-    selected_well_from_click(input$well_clicked)
-  })
-
-  # NEW: Render a single plot that combines all parameters for the selected well
-  # NEW: Render a single plot that combines all parameters for the selected well
-  output$combined_well_plot <- renderPlot({
-    well <- selected_well_from_click()
-    pretty_well <- strip_w(well)
-    req(well, analysis_output(), melting_curves_data())
+    req(input$well_clicked)
+    current <- input$selected_wells %||% character(0)
+    w <- input$well_clicked
     
-    # Get all parameters for the selected well from the main results
-    well_params <- analysis_output() %>%
-      filter(Well == well) %>%
-      pull(Parameter) %>%
-      unique()
-    
-    if (length(well_params) == 0) {
-      return(ggplot() + labs(title = paste("No parameters found for well:", well)))
+    # toggle: if clicked well is selected -> remove; else add
+    if (w %in% current) {
+      new_sel <- setdiff(current, w)
+    } else {
+      new_sel <- c(current, w)
     }
     
-    # --- Combine and reshape all melting curve data for the well ---
-    combined_curve_data <- lapply(well_params, function(param) {
-      curve_data_wide <- melting_curves_data()[[param]]
+    updateSelectInput(session, "selected_wells", selected = new_sel)
+  })
+  
+  observeEvent(input$drag_select_wells, {
+    info <- input$drag_select_wells
+    if (is.null(info)) return()
+    
+    wells <- info$wells %||% character(0)
+    mode  <- info$mode  %||% "add"
+    if (!length(wells)) return()
+    
+    current <- input$selected_wells %||% character(0)
+    
+    if (identical(mode, "remove")) {
+      new_sel <- setdiff(current, wells)
+    } else {
+      new_sel <- union(current, wells)
+    }
+    
+    updateSelectInput(session, "selected_wells", selected = new_sel)
+  })
+  
+  
+
+  output$combined_well_plot <- plotly::renderPlotly({
+    wells <- selected_wells()
+    req(analysis_output(), melting_curves_data())
+    
+    if (length(wells) == 0) {
+      p <- ggplot() +
+        theme_void() +
+        ggtitle("Select one or more wells on the plate (or from the dropdown) to see melting curves")
+      return(ggplotly(p))
+    }
+    
+    res    <- analysis_output()
+    curves <- melting_curves_data()
+    
+    # (Well, Parameter) combos present in results
+    combos <- res %>%
+      dplyr::filter(Well %in% wells) %>%
+      dplyr::distinct(Well, Parameter)
+    
+    if (nrow(combos) == 0) {
+      p <- ggplot() +
+        theme_void() +
+        ggtitle("No parameters found for the selected wells.")
+      return(ggplotly(p))
+    }
+    
+    # Build long df
+    df_list <- lapply(seq_len(nrow(combos)), function(i) {
+      w <- combos$Well[i]
+      p <- combos$Parameter[i]
       
-      # NEW CHECK: Make sure the data exists and has rows before processing
-      if (is.null(curve_data_wide) || nrow(curve_data_wide) == 0) {
-        return(NULL)
-      }
+      wide <- curves[[p]]
+      if (is.null(wide)) return(NULL)
+      if (!("Temperature" %in% names(wide))) return(NULL)
+      if (!(w %in% names(wide))) return(NULL)
       
-      # NEW CHECK: Ensure the well column exists in the wide data
-      if (!(well %in% names(curve_data_wide))) {
-        return(NULL)
-      }
-      
-      curve_data_wide %>%
-        pivot_longer(
-          cols = -Temperature,
-          names_to = "Well",
-          values_to = "dRFU_dT"
-        ) %>%
-        filter(Well == well) %>%
-        mutate(Parameter = param)
+      data.frame(
+        Temperature = wide$Temperature,
+        dRFU_dT     = wide[[w]],
+        Well        = w,
+        Parameter   = p,
+        stringsAsFactors = FALSE
+      )
     })
     
-    # Stack all the data frames on top of each other
-    combined_data_long <- do.call(rbind, combined_curve_data)
+    combined_data_long <- dplyr::bind_rows(df_list)
     
-    if (is.null(combined_data_long) || nrow(combined_data_long) == 0) {
-      return(ggplot() + labs(title = paste("No melting curve data found for well:", well)))
+    if (nrow(combined_data_long) == 0) {
+      p <- ggplot() +
+        theme_void() +
+        ggtitle("No melting curve data available for the selected wells.")
+      return(ggplotly(p))
     }
     
-    # Define the color map
+    # Add channel + pretty well
+    combined_data_long$Channel    <- param_channel(combined_data_long$Parameter)
+    combined_data_long$PrettyWell <- strip_w(combined_data_long$Well)
+    
+    # --- CHANNEL FILTER HERE ---
+    sel_channels <- input$channel_filter
+    if (is.null(sel_channels) || !length(sel_channels)) {
+      p <- ggplot() +
+        theme_void() +
+        ggtitle("No channels selected. Please select at least one channel below the plot.")
+      return(ggplotly(p))
+    }
+    
+    combined_data_long <- combined_data_long %>%
+      dplyr::filter(Channel %in% sel_channels)
+    
+    if (nrow(combined_data_long) == 0) {
+      p <- ggplot() +
+        theme_void() +
+        ggtitle("No melting curve data for the selected channels and wells.")
+      return(ggplotly(p))
+    }
+    
+    # Color map by parameter (as before)
     color_map <- c(
       "FV-LEI" = "blue", "FII" = "green", "A1298C" = "purple", "PAI" = "purple",
-      "HPAI" = "purple", "FV CAMB" = "purple", "FV-CAMB" = "purple", "ACE" = "purple", "APOE1" = "orange",
-      "APOE2" = "purple", "C677T" = "orange", "FXIII" = "orange", "FGB" = "orange",
-      "APOB" = "orange", "LTA" = "orange", "H1299R" = "orange",
-      "E148Q" = "orange", "R761H" = "purple", 
-      "F479L" = "orange", "P408Q" = "purple", 
-      "V726A" = "orange", "P369S" = "purple", 
-      "M694V" = "orange", "M680I" = "purple",
-      "A744S" = "orange", "E167D" = "purple"
+      "HPAI" = "purple", "FV CAMB" = "purple", "FV-CAMB" = "purple", "ACE" = "purple",
+      "APOE1" = "orange", "APOE2" = "purple", "C677T" = "orange", "FXIII" = "orange",
+      "FGB" = "orange", "APOB" = "orange", "LTA" = "orange", "H1299R" = "orange",
+      "E148Q" = "orange", "R761H" = "purple", "F479L" = "orange", "R408Q" = "purple",
+      "V726A" = "orange", "P369S" = "purple", "M694V" = "orange", "M680I" = "purple",
+      "A744S" = "orange", "E167D" = "purple", "P408Q" = "purple"
     )
     
-    # Ensure all parameters have a color, using gray for any not in the map
-    all_params_in_data <- unique(combined_data_long$Parameter)
-    missing_colors <- setdiff(all_params_in_data, names(color_map))
+    all_params <- unique(combined_data_long$Parameter)
+    missing_colors <- setdiff(all_params, names(color_map))
     if (length(missing_colors) > 0) {
-      new_colors <- setNames(rep("gray50", length(missing_colors)), missing_colors)
-      color_map <- c(color_map, new_colors)
+      color_map <- c(color_map, setNames(rep("grey50", length(missing_colors)), missing_colors))
     }
     
-    # --- Create the combined plot ---
-    p <- ggplot(combined_data_long, aes(x = Temperature, y = dRFU_dT, color = Parameter)) +
-      geom_line(size = 1) +
+    p <- ggplot(
+      combined_data_long,
+      aes(
+        x = Temperature,
+        y = dRFU_dT,
+        color   = Parameter,          # still color by parameter
+        linetype = Well,              # line type by well
+        group  = interaction(Well, Parameter),
+        text   = paste0(
+          "Well: ", PrettyWell, "\n",
+          "Parameter: ", Parameter, "\n",
+          "Channel: ", Channel, "\n",
+          "Temperature: ", round(Temperature, 2), " \u00B0C",
+          "-d(RFU)/dT: ", round(dRFU_dT, 2)
+        )
+      )
+    ) +
+      geom_line(
+        size  = 0.9,
+        alpha = if (length(wells) > 1) 0.7 else 1
+      ) +
       labs(
-        title = paste("Melting Curves for Well", pretty_well),
-        x = "Temperature (B0C)",
+        title = if (length(wells) == 1L) {
+          paste("Melting Curves for Well", strip_w(wells[1]))
+        } else {
+          paste("Melting Curves for Wells", paste(strip_w(wells), collapse = ", "))
+        },
+        x = "Temperature (\u00B0C)",
         y = "-d(RFU)/dT"
       ) +
       scale_color_manual(values = color_map) +
       theme_minimal() +
-      theme(plot.title = element_text(hjust = 0.5, face = "bold"))
+      theme(
+        plot.title  = element_text(hjust = 0.5, face = "bold"),
+        legend.title = element_blank()
+      )
     
-    # Add peak points for all parameters, but only if the required columns exist
-    peak_data <- analysis_output() %>%
-      filter(Well == well) %>%
-      select(Parameter, matches("Peak_")) %>%
-      distinct()
-    
-    # NEW CHECK: Only add geom_point if the necessary columns are present in peak_data
-    if (nrow(peak_data) > 0 && "Peak_Temp" %in% names(peak_data) && "Peak_dRFU_dT" %in% names(peak_data)) {
-      p <- p + geom_point(data = peak_data, aes(x = Peak_Temp, y = Peak_dRFU_dT, color = Parameter),
-                          size = 3, shape = 4, stroke = 1.5)
-    }
-    
-    p
+    ggplotly(p, tooltip = "text") %>%
+      layout(hovermode = "closest")
   })
+  
+  
+  
+ 
   
   # Observe clicks on well buttons
   observeEvent(input$well_clicked, {
@@ -1086,40 +1734,10 @@ server <- function(input, output, session) {
   })
   
   # Render UI for well-specific results
-  output$well_specific_results_ui <- renderUI({
-    well <- selected_well_id()
-    all_results <- analysis_output()
-    
-    if (is.null(well) || is.null(all_results)) {
-      return(p("Click on a well above to see its specific results."))
-    }
-    well_results <- all_results[all_results$Well == well, ]
-    if (nrow(well_results) == 0) {
-      return(div( h4(paste("Results for Well:", well)), p("No analysis data found for this well.")))
-    }
-    div( h4(paste("Results for Well:", strip_w(well))), DTOutput("well_detail_table"))
-  })
+
   
   # Render detailed table for selected well
-  output$well_detail_table <- renderDT({
-    well <- selected_well_id()
-    all_results <- analysis_output()
-    if (is.null(well) || is.null(all_results)) { return(NULL) }
-    
-    well_results <- all_results[all_results$Well == well, ]
-    
-    # Keep all rows for the well, but only select the desired columns
-    selected_cols <- well_results %>%
-      filter(!Parameter %in% c("APOE1", "APOE2")) %>%
-      select(Well, `Sample Name`, Parameter, Genotype)
-    display_df <- well_results %>%
-      dplyr::filter(!Parameter %in% c("APOE1", "APOE2")) %>%
-      dplyr::select(Well, `Sample Name`, Parameter, Genotype)
-    
-    display_df$Well <- strip_w(display_df$Well)
-    
-    DT::datatable(display_df, options = list(pageLength = 5, dom = 'tip'), rownames = FALSE)
-  })
+
   
   # Render tabs for general parameter results
   output$results_tabs <- renderUI({
@@ -1131,9 +1749,9 @@ server <- function(input, output, session) {
     
     # Your exact desired order
     desired_order <- c(
-      "FV-LEI", "FII", "A1298C", "C677T", "PAI", "FXIII", "HPAI",
+      "FII", "FV-LEI",   "C677T", "A1298C", "PAI", "FXIII", "HPAI",
       "FGB", "FV CAMB", "APOB","H1299R", "ACE", "LTA", "APOE",
-      "E148Q", "R761H", "F479L", "P408Q", "V726A",
+      "E148Q", "R761H", "F479L", "R408Q", "V726A",
       "P369S", "M694V", "M680I", "A744S", "E167D"
     )
     
@@ -1143,13 +1761,68 @@ server <- function(input, output, session) {
     # Build one tabPanel per parameter
     tabs <- lapply(params_to_show, function(param) {
       tabPanel(
-        title = param,
+        title = param_display(param),
         DTOutput(paste0("table_", param))
       )
     })
     
     do.call(tabsetPanel, tabs)
   })
+  output$well_tabs_ui <- renderUI({
+    df <- analysis_output()
+    req(df, nrow(df) > 0)
+    wells <- input$selected_wells %||% character(0)
+    if (!length(wells)) {
+      return(p("Select one or more wells to see per-well result tables."))
+    }
+    
+    tabs <- lapply(wells, function(w) {
+      safe_id <- sanitize_id(w)
+      tabPanel(
+        title = display_well(w),
+        DT::dataTableOutput(paste0("well_tbl_", safe_id))
+      )
+    })
+    
+    do.call(tabsetPanel, c(tabs, list(id = "well_tabset")))
+  })
+  observe({
+    df <- analysis_output()
+    req(df, nrow(df) > 0)
+    
+    wells <- input$selected_wells %||% character(0)
+    if (!length(wells)) return()
+    
+    # Filter out APOE1/APOE2 as before
+    df <- df[ ! df$Parameter %in% c("APOE1", "APOE2"), , drop = FALSE]
+    
+    for (w in wells) {
+      local({
+        well <- w
+        safe_id <- sanitize_id(well)
+        df_w <- df[df$Well == well, , drop = FALSE]
+        
+        output[[paste0("well_tbl_", safe_id)]] <- DT::renderDataTable({
+          if (nrow(df_w) == 0) return(NULL)
+          
+          display_df <- df_w %>%
+            dplyr::select(Well, `Sample Name`, Parameter, Genotype)
+          
+          display_df$Well      <- strip_w(display_df$Well)
+          display_df$Parameter <- param_display(display_df$Parameter)
+          display_df$Genotype  <- geno_display(display_df$Genotype, display_df$Parameter)
+          
+          DT::datatable(
+            display_df,
+            options = list(pageLength = 5, dom = 'tip'),
+            rownames = FALSE
+          )
+        })
+      })
+    }
+  })
+  
+  
   
   # After your renderUI for results_tabs:
   
@@ -1159,9 +1832,9 @@ server <- function(input, output, session) {
     res <- analysis_output()
     filtered_res <- res[ ! res$Parameter %in% c("APOE1","APOE2"), ]
     desired_order <- c(
-      "FV-LEI","FII","A1298C","C677T","PAI","FXIII","HPAI",
+      "FII","FV-LEI", "C677T", "A1298C", "PAI","FXIII","HPAI",
       "FGB","FV CAMB","APOB", "H1299R", "ACE","LTA","APOE",
-      "E148Q","R761H","F479L","P408Q","V726A",
+      "E148Q","R761H","F479L","R408Q","V726A",
       "P369S","M694V","M680I","A744S","E167D"
     )
     params_to_show <- intersect(desired_order, unique(filtered_res$Parameter))
@@ -1177,6 +1850,8 @@ server <- function(input, output, session) {
           # select the columns you want displayed
           display_df <- df[, c("Well", "Sample Name", "Parameter", "Genotype"), drop = FALSE]
           display_df$Well <- strip_w(display_df$Well)
+          display_df$Parameter <- param_display(display_df$Parameter)
+          display_df$Genotype  <- geno_display(display_df$Genotype, df$Parameter)
           DT::datatable(
             display_df,
             options = list(pageLength = 10, dom = 'tip'),
@@ -1204,61 +1879,185 @@ server <- function(input, output, session) {
     write_df <- all_results %>%
       dplyr::mutate(Well = as.character(display_well(Well)))
     
-    # ---- Summary sheet (unchanged logic, just using write_df) ----
-    summary_data <- write_df %>%
-      dplyr::filter(!Genotype %in% c("Pos Ctrl", "NTC")) %>%
-      dplyr::filter(!Parameter %in% c("APOE1", "APOE2")) %>%
-      dplyr::distinct(`Sample Name`, Parameter, .keep_all = TRUE) %>%
-      tidyr::pivot_wider(
-        id_cols = `Sample Name`,
-        names_from = Parameter,
-        values_from = Genotype
-      )
-    
     wb <- openxlsx::createWorkbook()
-    addWorksheet(wb, "Summary Table")
-    writeData(wb, "Summary Table", summary_data, withFilter = FALSE)
     
+    # ---------- Styles ----------
     header_style <- createStyle(textDecoration = "Bold", fgFill = "#DCE6F1")
     odd_row_style <- createStyle(fgFill = "#F2F2F2")
     even_row_style <- createStyle(fgFill = "#FFFFFF")
     
-    addStyle(wb, "Summary Table", header_style, rows = 1, cols = 1:ncol(summary_data), gridExpand = TRUE)
-    
-    if (nrow(summary_data) >= 1) {
-      odd_rows <- seq(2, nrow(summary_data) + 1, 2)
-      addStyle(wb, "Summary Table", odd_row_style, rows = odd_rows, cols = 1:ncol(summary_data), gridExpand = TRUE)
+    # Helper: make an Excel-safe, unique sheet name from a param code
+    sanitize_sheet_name <- function(param_code) {
+      # Start from the display label (with slashes)
+      base <- param_display(param_code)                    # e.g. "FII / Protrombin (G20210A)"
+      
+      # Replace slashes with dashes for sheet name readability
+      base <- gsub("/", "-", base, fixed = TRUE)
+      
+      # Remove any other illegal characters for sheet names
+      # (no [ ] * ? / \ : and max 31 chars)
+      base <- gsub("[\\[\\]\\*\\?/\\\\:]", "_", base)
+      base <- trimws(base)
+      if (base == "") base <- "Sheet"
+      
+      # Ensure <= 31 chars
+      base <- substr(base, 1, 31)
+      
+      # Ensure uniqueness in this workbook
+      used <- openxlsx::sheets(wb)
+      name <- base
+      i <- 2
+      while (name %in% used) {
+        name <- substr(paste0(base, "_", i), 1, 31)
+        i <- i + 1
+      }
+      name
     }
-    if (nrow(summary_data) >= 2) {
-      even_rows <- seq(3, nrow(summary_data) + 1, 2)
-      addStyle(wb, "Summary Table", even_row_style, rows = even_rows, cols = 1:ncol(summary_data), gridExpand = TRUE)
-    }
-    setColWidths(wb, "Summary Table", cols = 1:ncol(summary_data), widths = "auto")
     
-    # ---- One sheet per parameter (Well column uses numbers for rotor) ----
+    
+    # ---------- Helper: build CVD / FMF summary sheets ----------
+    build_summary_sheet <- function(sheet_name, param_set) {
+      df <- write_df %>%
+        dplyr::filter(
+          Parameter %in% param_set,
+          !Genotype %in% c("Pos Ctrl", "NTC"),
+          !Parameter %in% c("APOE1", "APOE2")
+        ) %>%
+        dplyr::distinct(`Sample Name`, Parameter, .keep_all = TRUE)
+      
+      if (nrow(df) == 0) return(invisible(NULL))
+      
+      # Apply display mappings (genotype + parameter label)
+      df <- df %>%
+        dplyr::mutate(
+          Genotype          = geno_display(Genotype, Parameter),
+          Parameter_display = param_display(Parameter)
+        )
+      
+      df_wide <- df %>%
+        tidyr::pivot_wider(
+          id_cols   = `Sample Name`,
+          names_from = Parameter_display,
+          values_from = Genotype
+        ) %>%
+        dplyr::arrange(`Sample Name`)
+      
+      # Reorder columns according to internal order in param_set
+      present_internal <- intersect(param_set, unique(df$Parameter))
+      desired_display  <- param_display(present_internal)
+      
+      cols_order <- c("Sample Name", desired_display[desired_display %in% names(df_wide)])
+      df_wide    <- df_wide[, cols_order, drop = FALSE]
+      
+      addWorksheet(wb, sheet_name)
+      writeData(wb, sheet_name, df_wide, withFilter = FALSE)
+      
+      # Header style
+      addStyle(
+        wb, sheet_name, header_style,
+        rows = 1, cols = 1:ncol(df_wide), gridExpand = TRUE
+      )
+      
+      # Stripe rows
+      if (nrow(df_wide) >= 1) {
+        odd_rows <- seq(2, nrow(df_wide) + 1, 2)
+        addStyle(
+          wb, sheet_name, odd_row_style,
+          rows = odd_rows, cols = 1:ncol(df_wide), gridExpand = TRUE
+        )
+      }
+      if (nrow(df_wide) >= 2) {
+        even_rows <- seq(3, nrow(df_wide) + 1, 2)
+        addStyle(
+          wb, sheet_name, even_row_style,
+          rows = even_rows, cols = 1:ncol(df_wide), gridExpand = TRUE
+        )
+      }
+      
+      setColWidths(wb, sheet_name, cols = 1:ncol(df_wide), widths = "auto")
+      
+      # A4, landscape, fit to one page wide
+      openxlsx::pageSetup(
+        wb, sheet = sheet_name,
+        orientation    = "landscape",
+        paperSize      = 9,   # A4
+        fitToWidth     = 1,
+        fitToHeight    = 0,
+        printTitleRows = 1
+      )
+      
+      # Freeze header
+      openxlsx::freezePane(wb, sheet = sheet_name, firstRow = TRUE)
+    }
+    
+    # ---------- Build CVD & FMF summaries ----------
+    build_summary_sheet("CVD_Summary", cvd_params)
+    build_summary_sheet("FMF_Summary", fmf_params)
+    
+    # ---------- One sheet per parameter (detail sheets) ----------
     write_df2 <- write_df %>%
       dplyr::filter(!Genotype %in% c("Pos Ctrl", "NTC")) %>%
-      dplyr::filter(!Parameter %in% c("APOE1", "APOE2")) 
+      dplyr::filter(!Parameter %in% c("APOE1", "APOE2"))
     
-    parameters <- setdiff(unique(write_df2$Parameter), c("APOE1", "APOE2"))
+    # Order sheets according to our desired CVD + FMF ordering
+    all_ordered <- c(cvd_params, fmf_params)
+    present_in_data <- intersect(all_ordered, unique(write_df2$Parameter))
+    parameters <- present_in_data
     
     for (p in parameters) {
-      addWorksheet(wb, p)
+      sheet_name <- sanitize_sheet_name(p)
+      
+      addWorksheet(wb, sheet_name)
+      
       parameter_data <- write_df %>%
         dplyr::filter(Parameter == p) %>%
-        dplyr::select(Well, `Sample Name`, Parameter, Genotype)
-      writeData(wb, p, parameter_data, withFilter = FALSE)
-      addStyle(wb, p, header_style, rows = 1, cols = 1:ncol(parameter_data), gridExpand = TRUE)
+        dplyr::select(Well, `Sample Name`, Parameter, Genotype) %>%
+        dplyr::mutate(
+          Well      = as.character(display_well(Well)),
+          Parameter = param_display(Parameter),
+          Genotype  = geno_display(Genotype, Parameter)
+        )
+      
+      writeData(wb, sheet_name, parameter_data, withFilter = FALSE)
+      
+      addStyle(
+        wb, sheet_name, header_style,
+        rows = 1, cols = 1:ncol(parameter_data), gridExpand = TRUE
+      )
+      
       if (nrow(parameter_data)) {
-        addStyle(wb, p, odd_row_style, rows = seq(2, nrow(parameter_data) + 1, 2), cols = 1:ncol(parameter_data), gridExpand = TRUE)
-        addStyle(wb, p, even_row_style, rows = seq(3, nrow(parameter_data) + 1, 2), cols = 1:ncol(parameter_data), gridExpand = TRUE)
+        addStyle(
+          wb, sheet_name, odd_row_style,
+          rows = seq(2, nrow(parameter_data) + 1, 2),
+          cols = 1:ncol(parameter_data),
+          gridExpand = TRUE
+        )
+        addStyle(
+          wb, sheet_name, even_row_style,
+          rows = seq(3, nrow(parameter_data) + 1, 2),
+          cols = 1:ncol(parameter_data),
+          gridExpand = TRUE
+        )
       }
-      setColWidths(wb, p, cols = 1:ncol(parameter_data), widths = "auto")
+      
+      setColWidths(wb, sheet_name, cols = 1:ncol(parameter_data), widths = "auto")
+      
+      openxlsx::pageSetup(
+        wb, sheet = sheet_name,
+        orientation = "landscape",
+        paperSize   = 9,
+        fitToWidth  = 1,
+        fitToHeight = 0
+      )
+      
+      openxlsx::freezePane(wb, sheet = sheet_name, firstRow = TRUE)
     }
     
     openxlsx::saveWorkbook(wb, path, overwrite = TRUE)
     showNotification(paste("Excel saved to", path), type = "message")
   })
+  
+  
   
 
   

@@ -282,38 +282,126 @@ cvd_all_in_one__v2 <- function(input_dir){
                                                       full.names = TRUE), n = 1)), sep = ";") == 1 ){
     sep <- ","
     dec <- "."
-  }else{
+  } else {
     sep <- ";"
     dec <- ","
   }
   
+  ## ---- read well_info ONCE, using detected sep/dec ----
+  well_info <- as.data.frame(
+    read.table(
+      file   = list.files(path = input_dir, pattern = "Quantification Cq Results", full.names = TRUE),
+      header = TRUE, sep = sep, dec = dec
+    )
+  )
+  
+  well_info <- well_info[, c("Well", "Target", "Fluor", "Sample", "Content")]
+  well_info$Well <- gsub("([A-Z])0([1-9])", "\\1\\2", well_info$Well)
+  
+  ## ---- Map Target text to internal parameter IDs (canonical names) ----
+  ## These IDs are the ones you already use everywhere: "FII","FV-LEI","C677T","PAI", etc.
+  map_target_to_param <- function(x) {
+    x0  <- trimws(as.character(x))
+    out <- rep(NA_character_, length(x0))
+    
+    # PAI: "PAI" or "PAI (4G/5G)"
+    is_pai <- grepl("(?i)\\bPAI\\b|PAI\\s*\\(4G\\s*[/\\-]\\s*5G\\)", x0, perl = TRUE)
+    out[is_pai] <- "PAI"
+    
+    # Factor V Leiden: "FV" or "Factor V Leiden (G1691A)"
+    is_fv <- grepl("(?i)^FV$|Factor\\s+V\\s+Leiden", x0, perl = TRUE)
+    out[is_fv] <- "FV-LEI"
+    
+    # FII / Protrombin: "FII" or "FII / Protrombin (G20210A)"
+    is_fii <- grepl("(?i)\\bFII\\b|FII\\s*[/\\-]\\s*Protrombin\\s*\\(G20210A\\)", x0, perl = TRUE)
+    out[is_fii] <- "FII"
+    
+    # MTHFR (C677T)
+    is_677 <- grepl("(?i)677|MTHFR\\s*\\(C677T\\)", x0, perl = TRUE)
+    out[is_677] <- "C677T"
+    
+    # MTHFR (A1298C)
+    is_1298 <- grepl("(?i)1298|MTHFR\\s*\\(A1298C\\)", x0, perl = TRUE)
+    out[is_1298] <- "A1298C"
+    
+    # Factor XIII (V34L): "FX", "FXIII", or full text
+    is_fxiii <- grepl("(?i)\\bFX(III)?\\b|Factor\\s+XIII\\s*\\(V34L\\)", x0, perl = TRUE)
+    out[is_fxiii] <- "FXIII"
+    
+    # FGB
+    is_fgb <- grepl("(?i)\\bFGB\\b", x0)
+    out[is_fgb] <- "FGB"
+    
+    # HPAI
+    is_hpai <- grepl("(?i)\\bHPAI\\b", x0)
+    out[is_hpai] <- "HPAI"
+    
+    # FV-CAMB (allow "FV CAMB" or "FV-CAMB")
+    is_fvcamb <- grepl("(?i)FV[- ]CAMB", x0)
+    out[is_fvcamb] <- "FV-CAMB"
+    
+    # APOB
+    is_apob <- grepl("(?i)\\bAPOB\\b", x0)
+    out[is_apob] <- "APOB"
+    
+    # ACE
+    is_ace <- grepl("(?i)\\bACE\\b", x0)
+    out[is_ace] <- "ACE"
+    
+    # LTA
+    is_lta <- grepl("(?i)\\bLTA\\b", x0)
+    out[is_lta] <- "LTA"
+    
+    # APOE1 / APOE2
+    is_apoe1 <- grepl("(?i)APOE1", x0)
+    out[is_apoe1] <- "APOE1"
+    
+    is_apoe2 <- grepl("(?i)APOE2", x0)
+    out[is_apoe2] <- "APOE2"
+    
+    # H1299R
+    is_h1299r <- grepl("(?i)H1299R", x0)
+    out[is_h1299r] <- "H1299R"
+    
+    out
+  }
+  
+  well_info$ParamID <- map_target_to_param(well_info$Target)
+  
   ## initialize melting points for parameters
-  fv_melt <- c(64,68)
-  fii_melt <- c(66,70)
-  c677_melt <- c(63,69)
+  fv_melt    <- c(64,68)
+  fii_melt   <- c(66,70)
+  c677_melt  <- c(63,69)
   a1298_melt <- c(63,70)
   fxiii_melt <- c(66,71)
-  fgb_melt <- c(50,57)
-  hpai_melt <- c(63,67)
-  apob_melt <- c(62,67)
-  fvcamb_melt <- c(64,67)
-  lta_melt <- c(63,70)
-  ace_melt <- c(62,67)
+  fgb_melt   <- c(50,57)
+  hpai_melt  <- c(63,67)
+  apob_melt  <- c(62,67)
+  fvcamb_melt<- c(64,67)
+  lta_melt   <- c(63,70)
+  ace_melt   <- c(62,67)
   apoe1_melt <- c(55,67)
   apoe2_melt <- c(64,71)
-  h1299r_melt <- c(65,69)
-  melt_for_12 <- c(mean(fv_melt), mean(fii_melt), mean(c677_melt), mean(a1298_melt), mean(fxiii_melt), mean(fgb_melt), mean(hpai_melt), mean(apob_melt), mean(fvcamb_melt),  mean(ace_melt),mean(lta_melt), mean(h1299r_melt))
-  names(melt_for_12) <- c("FV-LEI","FII", "C677T", "A1298C", "FXIII", "FGB", "HPAI",  "APOB","FV-CAMB", "ACE", "LTA", "H1299R")
+  h1299r_melt<- c(65,69)
+  
+  melt_for_12 <- c(mean(fv_melt), mean(fii_melt), mean(c677_melt), mean(a1298_melt),
+                   mean(fxiii_melt), mean(fgb_melt), mean(hpai_melt), mean(apob_melt),
+                   mean(fvcamb_melt),  mean(ace_melt), mean(lta_melt), mean(h1299r_melt))
+  names(melt_for_12) <- c("FV-LEI","FII", "C677T", "A1298C", "FXIII", "FGB", "HPAI",
+                          "APOB","FV-CAMB", "ACE", "LTA", "H1299R")
+  
   melt_for_apoe <- c(mean(apoe1_melt), mean(apoe2_melt))
   names(melt_for_apoe) <- c("APOE1", "APOE2")
-  melt_list_cvd <- list(fv_melt, fii_melt, c677_melt, a1298_melt, fxiii_melt, fgb_melt, hpai_melt, apob_melt, fvcamb_melt, ace_melt, lta_melt, apoe1_melt, apoe2_melt, h1299r_melt)
-  names(melt_list_cvd) <- c("FV-LEI","FII", "C677T", "A1298C", "FXIII", "FGB", "HPAI",  "APOB","FV-CAMB", "ACE", "LTA", "APOE1", "APOE2", "H1299R")
   
+  melt_list_cvd <- list(fv_melt, fii_melt, c677_melt, a1298_melt, fxiii_melt, fgb_melt,
+                        hpai_melt, apob_melt, fvcamb_melt, ace_melt, lta_melt,
+                        apoe1_melt, apoe2_melt, h1299r_melt)
+  names(melt_list_cvd) <- c("FV-LEI","FII", "C677T", "A1298C", "FXIII", "FGB", "HPAI",
+                            "APOB","FV-CAMB", "ACE", "LTA", "APOE1", "APOE2", "H1299R")
   
-  ##initialize CVD mix check
-  
+  ## ---- CVD mix definition (canonical ParamID names) ----
   cvd_mix_all <- list(
-    CVDM1 = c("FV", "FII", "C677T", "A1298C"),
+    CVDM1 = c("FV-LEI", "FII", "C677T", "A1298C"),
     CVDM2 = c("FXIII", "PAI"),
     CVDM3 = c("FGB", "HPAI"),
     CVDM4 = c("FV-CAMB", "APOB"),
@@ -321,40 +409,33 @@ cvd_all_in_one__v2 <- function(input_dir){
     CVDM6 = c("APOE1", "APOE2"),
     CVDM7 = c("H1299R")
   )
-  ##read data
-  ##add if exist clause for checking weather the data exists in the first place, if it doesn't exist create an empty data frame of the same name 
-  ##on the analysis part, if the data frame is empty, the loop must be skipped
-  ## for pai and apoe, a line of if clause must be added before the analysis
   
-  well_info <- as.data.frame(read.table(file = list.files(path = input_dir, pattern = "Quantification Cq Results", full.names = TRUE), header = TRUE, sep = ";", dec = ","))
-  if (ncol(well_info) < 2) {
-    well_info <- as.data.frame(read.table(file = list.files(path = input_dir, pattern = "Quantification Cq Results", full.names = TRUE), header = TRUE, sep = ",", dec = "."))
-  }
-  well_info <- well_info[,c("Well", "Target", "Fluor", "Sample", "Content")]
-  well_info$Well <- gsub("([A-Z])0([1-9])", "\\1\\2", well_info$Well)
-  well_info$MIX <- rep(NA_character_, nrow(well_info))
-  ##check the well contents, see if they match the mix contents
-  ##assign mixes to parameters
-  for (i in 1:nrow(well_info)) {
-    for (j in seq_along(cvd_mix_all)) {
-      if (well_info$Target[i] %in% cvd_mix_all[[j]]) {
-        well_info$MIX[i] <- names(cvd_mix_all)[j]
+  ## ---- assign MIX using ParamID (NA-safe) ----
+  well_info$MIX <- NA_character_
+  if (nrow(well_info) > 0) {
+    for (i in seq_len(nrow(well_info))) {
+      pid <- well_info$ParamID[i]
+      if (is.na(pid)) next        # <- prevents NA in if() via %in%
+      for (j in seq_along(cvd_mix_all)) {
+        if (pid %in% cvd_mix_all[[j]]) {
+          well_info$MIX[i] <- names(cvd_mix_all)[j]
+          break
+        }
       }
     }
   }
-  well_info <- well_info[well_info$MIX %in% names(cvd_mix_all),]
+  
+  ## keep only wells that belong to known mixes
+  well_info <- well_info[!is.na(well_info$MIX) & well_info$MIX %in% names(cvd_mix_all), ]
   if (length(unique(well_info$Well)) == 0) {
     return(app_skip("NO_WELLS_CVD"))
   }
-  ##check well content, if there are two mixes in the same well, return error
-  ## --- replace your current per-well E2 check with this block ---
   
-  # Any well that has targets from more than one CVD mix?
+  ## --- per-well E2 check: mixed CVD mixes in same well? ---
   mixes_per_well <- split(well_info$MIX, well_info$Well)
   bad_wells <- names(Filter(function(x) length(unique(x)) > 1, mixes_per_well))
   
   if (length(bad_wells)) {
-    # Build a readable per-well summary: WELL ??? mixes: [...]; targets: [...]
     detail <- vapply(bad_wells, function(w) {
       mx <- sort(unique(well_info$MIX[well_info$Well == w]))
       tg <- sort(unique(well_info$Target[well_info$Well == w]))
@@ -365,56 +446,112 @@ cvd_all_in_one__v2 <- function(input_dir){
     return(app_err("E2", paste(detail, collapse = " | ")))
   }
   
-  
+  ## ---- read derivative curve data using the same sep/dec ----
   if (length(list.files(path = input_dir, pattern = "Melt Curve Derivative Results_Cy5", full.names = TRUE)) > 0) {
-    cy5_data <- as.data.frame(read.table(list.files(path = input_dir, pattern = "Melt Curve Derivative Results_Cy5", full.names = TRUE), header = TRUE, sep = sep, dec = dec))
-    
-  }else {
-    cy5_data <- data.frame(Temperature = seq(35,84.8,0.3), Temperature_1 = seq(35,84.8,0.3),Temperature_2 = seq(35,84.8,0.3))
+    cy5_data <- as.data.frame(
+      read.table(
+        list.files(path = input_dir, pattern = "Melt Curve Derivative Results_Cy5", full.names = TRUE),
+        header = TRUE, sep = sep, dec = dec
+      )
+    )
+  } else {
+    cy5_data <- data.frame(
+      Temperature   = seq(35,84.8,0.3),
+      Temperature_1 = seq(35,84.8,0.3),
+      Temperature_2 = seq(35,84.8,0.3)
+    )
   }
   
-  
   if (length(list.files(path = input_dir, pattern = "Melt Curve Derivative Results_FAM", full.names = TRUE)) > 0) {
-    fam_data <- as.data.frame(read.table(file = list.files(path = input_dir, pattern = "Melt Curve Derivative Results_FAM", full.names = TRUE), header = TRUE, sep = sep, dec = dec))
-  }else {
-    fam_data <- data.frame(Temperature = seq(35,84.8,0.3), Temperature_1 = seq(35,84.8,0.3),Temperature_2 = seq(35,84.8,0.3))
+    fam_data <- as.data.frame(
+      read.table(
+        file = list.files(path = input_dir, pattern = "Melt Curve Derivative Results_FAM", full.names = TRUE),
+        header = TRUE, sep = sep, dec = dec
+      )
+    )
+  } else {
+    fam_data <- data.frame(
+      Temperature   = seq(35,84.8,0.3),
+      Temperature_1 = seq(35,84.8,0.3),
+      Temperature_2 = seq(35,84.8,0.3)
+    )
   }
   
   if (length(list.files(path = input_dir, pattern = "Melt Curve Derivative Results_HEX", full.names = TRUE)) > 0) {
-    hex_data <- as.data.frame(read.table(file = list.files(path = input_dir, pattern = "Melt Curve Derivative Results_HEX", full.names = TRUE), header = TRUE, sep = sep, dec = dec))
-  }else {
-    hex_data <- data.frame(Temperature = seq(35,84.8,0.3), Temperature_1 = seq(35,84.8,0.3),Temperature_2 = seq(35,84.8,0.3))
+    hex_data <- as.data.frame(
+      read.table(
+        file = list.files(path = input_dir, pattern = "Melt Curve Derivative Results_HEX", full.names = TRUE),
+        header = TRUE, sep = sep, dec = dec
+      )
+    )
+  } else {
+    hex_data <- data.frame(
+      Temperature   = seq(35,84.8,0.3),
+      Temperature_1 = seq(35,84.8,0.3),
+      Temperature_2 = seq(35,84.8,0.3)
+    )
   }
   
-  if (length(list.files(path = input_dir, pattern = "Melt Curve Derivative Results_ROX", full.names = TRUE)) > 0 || length(list.files(path = input_dir, pattern = "Melt Curve Derivative Results_Texas Red", full.names = TRUE)) > 0){ 
-    if(length(list.files(path = input_dir, pattern = "Melt Curve Derivative Results_ROX", full.names = TRUE)) > 0){
-      rox_data <- as.data.frame(read.table(list.files(path = input_dir, pattern = "Melt Curve Derivative Results_ROX", full.names = TRUE), header = TRUE, sep = sep, dec = dec))
-    }else if(length(list.files(path = input_dir, pattern = "Melt Curve Derivative Results_Texas Red", full.names = TRUE)) > 0){
-      rox_data <- as.data.frame(read.table(list.files(path = input_dir, pattern = "Melt Curve Derivative Results_Texas Red", full.names = TRUE), header = TRUE, sep = sep, dec = dec))
+  if (length(list.files(path = input_dir, pattern = "Melt Curve Derivative Results_ROX", full.names = TRUE)) > 0 ||
+      length(list.files(path = input_dir, pattern = "Melt Curve Derivative Results_Texas Red", full.names = TRUE)) > 0) { 
+    if (length(list.files(path = input_dir, pattern = "Melt Curve Derivative Results_ROX", full.names = TRUE)) > 0) {
+      rox_data <- as.data.frame(
+        read.table(
+          list.files(path = input_dir, pattern = "Melt Curve Derivative Results_ROX", full.names = TRUE),
+          header = TRUE, sep = sep, dec = dec
+        )
+      )
+    } else {
+      rox_data <- as.data.frame(
+        read.table(
+          list.files(path = input_dir, pattern = "Melt Curve Derivative Results_Texas Red", full.names = TRUE),
+          header = TRUE, sep = sep, dec = dec
+        )
+      )
     }
-  }else {
-    rox_data <- data.frame(Temperature = seq(35,84.8,0.3), Temperature_1 = seq(35,84.8,0.3),Temperature_2 = seq(35,84.8,0.3))
+  } else {
+    rox_data <- data.frame(
+      Temperature   = seq(35,84.8,0.3),
+      Temperature_1 = seq(35,84.8,0.3),
+      Temperature_2 = seq(35,84.8,0.3)
+    )
   }
   
+  ## ---- parse data into parameters using ParamID -> wells ----
+  pai_wells    <- well_info$Well[well_info$ParamID == "PAI"]
+  fv_wells     <- well_info$Well[well_info$ParamID == "FV-LEI"]
+  fii_wells    <- well_info$Well[well_info$ParamID == "FII"]
+  a1298_wells  <- well_info$Well[well_info$ParamID == "A1298C"]
+  c677_wells   <- well_info$Well[well_info$ParamID == "C677T"]
+  fxiii_wells  <- well_info$Well[well_info$ParamID == "FXIII"]
+  fgb_wells    <- well_info$Well[well_info$ParamID == "FGB"]
+  hpai_wells   <- well_info$Well[well_info$ParamID == "HPAI"]
+  fvcamb_wells <- well_info$Well[well_info$ParamID == "FV-CAMB"]
+  apob_wells   <- well_info$Well[well_info$ParamID == "APOB"]
+  ace_wells    <- well_info$Well[well_info$ParamID == "ACE"]
+  lta_wells    <- well_info$Well[well_info$ParamID == "LTA"]
+  apoe1_wells  <- well_info$Well[well_info$ParamID == "APOE1"]
+  apoe2_wells  <- well_info$Well[well_info$ParamID == "APOE2"]
+  h1299r_wells <- well_info$Well[well_info$ParamID == "H1299R"]
+  
+  # always keep Temperature; if no wells of that type, we still return a 1-col data.frame
+  pai_data    <- as.data.frame(cy5_data[,  c("Temperature", pai_wells),    drop = FALSE])
+  fv_data     <- as.data.frame(fam_data[, c("Temperature", fv_wells),      drop = FALSE])
+  fii_data    <- as.data.frame(hex_data[, c("Temperature", fii_wells),     drop = FALSE])
+  a1298_data  <- as.data.frame(cy5_data[,  c("Temperature", a1298_wells),  drop = FALSE])
+  c677_data   <- as.data.frame(rox_data[,  c("Temperature", c677_wells),   drop = FALSE])
+  fxiii_data  <- as.data.frame(rox_data[,  c("Temperature", fxiii_wells),  drop = FALSE])
+  fgb_data    <- as.data.frame(rox_data[,  c("Temperature", fgb_wells),    drop = FALSE])
+  hpai_data   <- as.data.frame(cy5_data[,  c("Temperature", hpai_wells),   drop = FALSE])
+  fvcamb_data <- as.data.frame(cy5_data[,  c("Temperature", fvcamb_wells), drop = FALSE])
+  apob_data   <- as.data.frame(rox_data[,  c("Temperature", apob_wells),   drop = FALSE])
+  ace_data    <- as.data.frame(cy5_data[,  c("Temperature", ace_wells),    drop = FALSE])
+  lta_data    <- as.data.frame(rox_data[,  c("Temperature", lta_wells),    drop = FALSE])
+  apoe1_data  <- as.data.frame(rox_data[,  c("Temperature", apoe1_wells),  drop = FALSE])
+  apoe2_data  <- as.data.frame(cy5_data[,  c("Temperature", apoe2_wells),  drop = FALSE])
+  h1299r_data <- as.data.frame(rox_data[,  c("Temperature", h1299r_wells), drop = FALSE])
   
   
-  ##parse data into parameters
-  
-  pai_data <- as.data.frame(cy5_data[,c("Temperature",well_info[grep(pattern = "\\bPAI\\b", x = well_info$Target, ignore.case = TRUE),"Well"])])
-  fv_data <- as.data.frame(fam_data[,c("Temperature", well_info[grep(pattern = "^FV$", x = well_info$Target, ignore.case = TRUE), "Well"])])
-  fii_data <- as.data.frame(hex_data[,c("Temperature", well_info[grep(pattern = "\\bFII\\b", x = well_info$Target, ignore.case = TRUE), "Well"])])
-  a1298_data <- as.data.frame(cy5_data[,c("Temperature", well_info[grep(pattern = "1298", x = well_info$Target), "Well"])])
-  c677_data <- as.data.frame(rox_data[,c("Temperature", well_info[grep(pattern = "677", x = well_info$Target), "Well"])])
-  fxiii_data <- as.data.frame(rox_data[,c("Temperature", well_info[grep(pattern = "\\bfx", x = well_info$Target, ignore.case = TRUE), "Well"])])
-  fgb_data <- as.data.frame(rox_data[,c("Temperature", well_info[grep(pattern = "\\bfgb\\b", x = well_info$Target, ignore.case = TRUE), "Well"])])
-  hpai_data <- as.data.frame(cy5_data[,c("Temperature", well_info[grep(pattern = "\\bHPAI\\b", well_info$Target, ignore.case = TRUE), "Well"])])
-  fvcamb_data <- as.data.frame(cy5_data[,c("Temperature", well_info[grep(pattern = "\\bfv-\\b", well_info$Target, ignore.case = TRUE), "Well"])])
-  apob_data <- as.data.frame(rox_data[,c("Temperature", well_info[grep(pattern = "\\bapob\\b", well_info$Target, ignore.case = TRUE), "Well"])])
-  ace_data <- as.data.frame(cy5_data[,c("Temperature", well_info[grep(pattern = "ACE", well_info$Target, ignore.case = TRUE), "Well"])])
-  lta_data <- as.data.frame(rox_data[,c("Temperature", well_info[grep(pattern = "LTA", well_info$Target, ignore.case = TRUE), "Well"])])
-  apoe1_data <- as.data.frame(rox_data[,c("Temperature", well_info[grep(pattern = "apoe1", well_info$Target, ignore.case = TRUE), "Well"])])
-  apoe2_data <- as.data.frame(cy5_data[,c("Temperature", well_info[grep(pattern = "apoe2", well_info$Target, ignore.case = TRUE), "Well"])])
-  h1299r_data <- as.data.frame(rox_data[,c("Temperature", well_info[grep(pattern = "\\bH1299R\\b", x = well_info$Target, ignore.case = TRUE), "Well"])])
   
   data_list_12 <- list(fv_data, fii_data,  c677_data, a1298_data, fxiii_data, fgb_data, hpai_data,  apob_data,fvcamb_data, ace_data, lta_data, h1299r_data)
   names(data_list_12) <- c("FV-LEI","FII", "C677T", "A1298C", "FXIII", "FGB", "HPAI","APOB",  "FV-CAMB", "ACE", "LTA", "H1299R")
@@ -426,21 +563,22 @@ cvd_all_in_one__v2 <- function(input_dir){
   
   ## well information data frames and lists
   
-  well_info_pai <- well_info[grep(pattern = "\\bPAI\\b", x = well_info$Target, ignore.case = TRUE),]
-  well_info_fv <- well_info[grep(pattern = "^FV$", x = well_info$Target, ignore.case = TRUE),]
-  well_info_fii <- well_info[grep(pattern = "\\bFII\\b", x = well_info$Target, ignore.case = TRUE),]
-  well_info_1298 <- well_info[grep(pattern = "1298", x = well_info$Target),]
-  well_info_677 <- well_info[grep(pattern = "677", x = well_info$Target),]
-  well_info_fxiii <- well_info[grep(pattern = "\\bfx", x = well_info$Target, ignore.case = TRUE),]
-  well_info_fgb <- well_info[grep(pattern = "\\bfgb\\b", x = well_info$Target, ignore.case = TRUE),]
-  well_info_hpai <-well_info[grep(pattern = "\\bHPAI\\b", well_info$Target, ignore.case = TRUE),]
-  well_info_fvcamb <-well_info[grep(pattern = "\\bfv-\\b", well_info$Target, ignore.case = TRUE),]
-  well_info_apob <-well_info[grep(pattern = "\\bapob\\b", well_info$Target, ignore.case = TRUE),]
-  well_info_ace <-well_info[grep(pattern = "ACE", well_info$Target, ignore.case = TRUE),]
-  well_info_lta <-well_info[grep(pattern = "LTA", well_info$Target, ignore.case = TRUE),]
-  well_info_1299 <- well_info[grep(pattern = "H1299R", well_info$Target, ignore.case = TRUE),]
-  well_info_apoe1 <-well_info[grep(pattern = "apoe1", well_info$Target, ignore.case = TRUE),]
-  well_info_apoe2 <-well_info[grep(pattern = "apoe2", well_info$Target, ignore.case = TRUE),]
+  well_info_pai    <- subset(well_info, ParamID == "PAI")
+  well_info_fv     <- subset(well_info, ParamID == "FV-LEI")
+  well_info_fii    <- subset(well_info, ParamID == "FII")
+  well_info_1298   <- subset(well_info, ParamID == "A1298C")
+  well_info_677    <- subset(well_info, ParamID == "C677T")
+  well_info_fxiii  <- subset(well_info, ParamID == "FXIII")
+  well_info_fgb    <- subset(well_info, ParamID == "FGB")
+  well_info_hpai   <- subset(well_info, ParamID == "HPAI")
+  well_info_fvcamb <- subset(well_info, ParamID == "FV-CAMB")
+  well_info_apob   <- subset(well_info, ParamID == "APOB")
+  well_info_ace    <- subset(well_info, ParamID == "ACE")
+  well_info_lta    <- subset(well_info, ParamID == "LTA")
+  well_info_1299   <- subset(well_info, ParamID == "H1299R")
+  well_info_apoe1  <- subset(well_info, ParamID == "APOE1")
+  well_info_apoe2  <- subset(well_info, ParamID == "APOE2")
+  
   
   well_list_12 <- list(well_info_fv, well_info_fii,  well_info_677, well_info_1298, well_info_fxiii, well_info_fgb, well_info_hpai,  well_info_apob, well_info_fvcamb, well_info_ace, well_info_lta, well_info_1299)
   names(well_list_12) <- c("FV-LEI","FII", "C677T", "A1298C", "FXIII", "FGB", "HPAI",  "APOB","FV-CAMB", "ACE", "LTA", "H1299R")
@@ -456,7 +594,20 @@ cvd_all_in_one__v2 <- function(input_dir){
       result_table <- data.frame()
       next
     }
-    result_table <- data.frame(row.names = colnames(data_list_12[[i]])[2:ncol(data_list_12[[i]])], min_dips = c(2:ncol(data_list_12[[i]])), max_dips = c(2:ncol(data_list_12[[i]])), peak_1 = c(2:ncol(data_list_12[[i]])), peak_2 = c(2:ncol(data_list_12[[i]])), Tm = c(2:ncol(data_list_12[[i]])), patient = c(2:ncol(data_list_12[[i]])), genotype = c(2:ncol(data_list_12[[i]])))
+    n_wells <- ncol(data_list_12[[i]]) - 1L
+    
+    result_table <- data.frame(
+      row.names = colnames(data_list_12[[i]])[2:ncol(data_list_12[[i]])],
+      min_dips  = rep(NA_real_,      n_wells),
+      max_dips  = rep(NA_real_,      n_wells),
+      peak_1    = rep(NA_real_,      n_wells),
+      peak_2    = rep(NA_real_,      n_wells),
+      Tm        = rep(NA_real_,      n_wells),
+      patient   = rep(NA_character_, n_wells),
+      genotype  = rep(NA_character_, n_wells),
+      stringsAsFactors = FALSE
+    )
+    
     result_tb_list_12 <- c(result_tb_list_12, list(result_table))
     result_tb_names <- c(result_tb_names, names(well_list_12[i]))
   }
@@ -498,7 +649,19 @@ cvd_all_in_one__v2 <- function(input_dir){
     min_dips <- c()
     max_dips <- c()
     FWHM <- c()
-    result_tb_pai <- data.frame(row.names = colnames(pai_data)[2:ncol(pai_data)], min_dips = c(2:ncol(pai_data)), max_dips = c(2:ncol(pai_data)), peak_1 = c(2:ncol(pai_data)), FWHM = c(2:ncol(pai_data)), patient = c(2:ncol(pai_data)), genotype = c(2:ncol(pai_data)))
+    n_pai <- ncol(pai_data) - 1L
+    
+    result_tb_pai <- data.frame(
+      row.names = colnames(pai_data)[2:ncol(pai_data)],
+      min_dips  = rep(NA_real_,      n_pai),
+      max_dips  = rep(NA_real_,      n_pai),
+      peak_1    = rep(NA_real_,      n_pai),
+      FWHM      = rep(NA_real_,      n_pai),
+      patient   = rep(NA_character_, n_pai),
+      genotype  = rep(NA_character_, n_pai),
+      stringsAsFactors = FALSE
+    )
+    
     for (i in 1:nrow(result_tb_pai)) {
       for (j in 1:nrow(well_info_pai)) {
         if (rownames(result_tb_pai)[i] == well_info_pai$Well[j]) {
@@ -519,40 +682,75 @@ cvd_all_in_one__v2 <- function(input_dir){
     }
     result_tb_pai$min_dips <- min_dips
     result_tb_pai$max_dips <- max_dips
-    result_tb_pai$FWHM <- FWHM
+    result_tb_pai$FWHM[1:length(FWHM)] <- FWHM
+    # 1) Mark controls
     for (i in 1:nrow(result_tb_pai)) {
-      if ("NTC" %in% well_info_pai$Content[which(well_info_pai$Well %in% rownames(result_tb_pai)[i])]){
+      this_well <- rownames(result_tb_pai)[i]
+      cont_vec  <- well_info_pai$Content[well_info_pai$Well == this_well]
+      
+      if ("NTC" %in% cont_vec) {
         result_tb_pai$genotype[i] <- "NTC"
-      } 
-      if ("Pos Ctrl" %in% well_info_pai$Content[which(well_info_pai$Well %in% rownames(result_tb_pai)[i])]){
+      } else if ("Pos Ctrl" %in% cont_vec) {
         result_tb_pai$genotype[i] <- "Pos Ctrl"
       }
-      if (is.na(result_tb_pai$min_dips[i]) && is.na(result_tb_pai$max_dips[i])) {
-        result_tb_pai$peak_1[i] <- NA
+    }
+    
+    # optional: if you don't care about peak_1 for PAI, leave it NA
+    result_tb_pai$peak_1 <- NA_real_
+    
+    # 2) Genotype calls based on FWHM / dips, relative to reference PC
+    #    (reference_pai_well is a *well name*, not an index)
+    ref_idx <- match(reference_pai_well, rownames(result_tb_pai))
+    
+    if (is.na(ref_idx)) {
+      warning("PAI: reference positive control well not found in result_tb_pai rownames; skipping PAI genotyping.")
+      result_tb_pai$genotype[is.na(result_tb_pai$genotype)] <- "No Peaks Detected within the Boundaries."
+    } else {
+      ref_FWHM <- result_tb_pai$FWHM[ref_idx]
+      ref_min  <- result_tb_pai$min_dips[ref_idx]
+      ref_max  <- result_tb_pai$max_dips[ref_idx]
+      
+      for (i in 1:nrow(result_tb_pai)) {
+        g_i <- result_tb_pai$genotype[i]
+        
+        ## 1) Keep controls frozen
+        if (!is.na(g_i) && g_i %in% c("NTC", "Pos Ctrl")) {
+          next
+        }
+        
+        ## 2) No data case: missing dips or FWHM -> "No peaks"
+        if ((is.na(result_tb_pai$min_dips[i]) && is.na(result_tb_pai$max_dips[i])) ||
+            is.na(result_tb_pai$FWHM[i]) ||
+            is.na(ref_FWHM) || is.na(ref_min) || is.na(ref_max)) {
+          
+          result_tb_pai$genotype[i] <- "No Peaks Detected within the Boundaries."
+          next
+        }
+        
+        ## 3) Otherwise: classify vs reference PC
+        F_i <- result_tb_pai$FWHM[i]
+        min_i <- result_tb_pai$min_dips[i]
+        max_i <- result_tb_pai$max_dips[i]
+        
+        if (F_i > (ref_FWHM - 1.40)) {
+          # 4G/5G (heterozygous)
+          result_tb_pai$genotype[i] <- "4G-5G"
+          
+        } else if (max_i < ref_max - 0.75) {
+          # 5G/5G (normal)
+          result_tb_pai$genotype[i] <- "5G-5G"
+          
+        } else if (min_i > ref_min + 1) {
+          # 4G/4G (homozygous mutant)
+          result_tb_pai$genotype[i] <- "4G-4G"
+          
+        } else {
+          # fallback if it doesn't fit any geometry cleanly
+          result_tb_pai$genotype[i] <- "No Peaks Detected within the Boundaries."
+        }
       }
     }
-    ##get genotype
     
-    for (i in 1:nrow(result_tb_pai)) {
-      if ("NTC" %in% result_tb_pai$genotype[i]){
-        next
-      }
-      if ("Pos Ctrl" %in% result_tb_pai$genotype[i]){
-        next
-      }
-      if (is.na(result_tb_pai$peak_1[i])){
-        result_tb_pai$genotype[i] <- "No Peaks Detected within the Boundaries."
-        next
-      }
-      if (result_tb_pai$FWHM[i] > (result_tb_pai[reference_pai_well, "FWHM"]-1.25) ) {
-        result_tb_pai$genotype[i] <- "4G-5G"
-      } else if (result_tb_pai$max_dips[i] < result_tb_pai[reference_pai_well,2]-0.75){
-        result_tb_pai$genotype[i] <- "5G-5G"
-      } else if (result_tb_pai$min_dips[i] > result_tb_pai[reference_pai_well,1]+1){
-        result_tb_pai$genotype[i] <- "4G-4G"
-      }
-      
-    }    
     
     result_tb_pai$Parameter <- c(rep(x = "PAI", nrow(result_tb_pai)))
     result_tb_pai <- cbind(rownames(result_tb_pai),result_tb_pai)
@@ -609,7 +807,7 @@ cvd_all_in_one__v2 <- function(input_dir){
         }
         
         if (length(true_peak_rfu) > 1) {
-          if (true_peak_rfu[2] > true_peak_rfu[1]/3) {
+          if (true_peak_rfu[2] > true_peak_rfu[1]/2.5) {
             result_tb_list_12[[i]]$peak_2[j-1] <- true_peak_rfu[2]
           }
           else {
@@ -723,31 +921,68 @@ cvd_all_in_one__v2 <- function(input_dir){
         }
       }
       for (j in 1:nrow(result_tb_list_12[[i]])) {
-        if (is.na(result_tb_list_12[[i]]$Tm[j])) {
-          result_tb_list_12[[i]]$genotype[j] <- "No Peaks Detected Within the Boundaries."
-        } else if ("NTC" %in% well_info$Content[which(well_info$Well %in% rownames(result_tb_list_12[[i]])[j])]){
+        well_j     <- rownames(result_tb_list_12[[i]])[j]
+        tm_j       <- result_tb_list_12[[i]]$Tm[j]
+        g_j        <- result_tb_list_12[[i]]$genotype[j]
+        param_name <- names(result_tb_list_12)[i]
+        
+        ## 1) Controls always win
+        if ("NTC" %in% well_info$Content[which(well_info$Well %in% well_j)]) {
           result_tb_list_12[[i]]$genotype[j] <- "NTC"
-        } else if ("Pos Ctrl" %in% well_info$Content[which(well_info$Well %in% rownames(result_tb_list_12[[i]])[j])]){
+          next
+        }
+        if ("Pos Ctrl" %in% well_info$Content[which(well_info$Well %in% well_j)]) {
           result_tb_list_12[[i]]$genotype[j] <- "Pos Ctrl"
-        } else if (result_tb_list_12[[i]]$genotype[j] == "Heterozygous" && names(result_tb_list_12[i]) == "ACE"){
-          result_tb_list_12[[i]]$genotype[j] <- "INS-DEL"
-        } else if (result_tb_list_12[[i]]$Tm[j] > tm && names(result_tb_list_12[i]) == "ACE"){
-          result_tb_list_12[[i]]$genotype[j] <- "DEL-DEL"
-        } else if (result_tb_list_12[[i]]$Tm[j] < tm && names(result_tb_list_12[i]) == "ACE"){
-          result_tb_list_12[[i]]$genotype[j] <- "INS-INS"
-        } else if ( result_tb_list_12[[i]]$genotype[j] == "Heterozygous"){
-          result_tb_list_12[[i]]$genotype[j] <- "Heterozygous"
-        } else if (result_tb_list_12[[i]]$Tm[j] > tm && names(result_tb_list_12[i]) != "A1298C"){
-          result_tb_list_12[[i]]$genotype[j] <- "Wild Type"
-        } else if (result_tb_list_12[[i]]$Tm[j] < tm && names(result_tb_list_12[i]) != "A1298C"){
-          result_tb_list_12[[i]]$genotype[j] <- "Homozygous Mutant"
-        } else if (result_tb_list_12[[i]]$Tm[j] > tm && names(result_tb_list_12[i]) == "A1298C"){
-          result_tb_list_12[[i]]$genotype[j] <- "Homozygous Mutant"
-        } else if (result_tb_list_12[[i]]$Tm[j] < tm && names(result_tb_list_12[i]) == "A1298C"){
-          result_tb_list_12[[i]]$genotype[j] <- "Wild Type"
+          next
         }
         
+        ## 2) Heterozygotes: already decided in the first loop from special logic
+        ##    They often have two peaks, so Tm is NA by design. Do NOT treat them
+        ##    as "no peaks".
+        if (!is.na(g_j) && g_j == "Heterozygous") {
+          if (param_name == "ACE") {
+            # ACE heterozygous label
+            result_tb_list_12[[i]]$genotype[j] <- "INS-DEL"
+          }
+          # For all other params, "Heterozygous" stays as is.
+          next
+        }
+        
+        ## 3) True "no peaks": Tm is NA AND we???re not heterozygous / control
+        if (is.na(tm_j)) {
+          result_tb_list_12[[i]]$genotype[j] <- "No Peaks Detected Within the Boundaries."
+          next
+        }
+        
+        ## 4) Single-peak genotype logic using Tm vs mean melt
+        if (param_name == "ACE") {
+          
+          if (tm_j > tm) {
+            result_tb_list_12[[i]]$genotype[j] <- "DEL-DEL"
+          } else {
+            result_tb_list_12[[i]]$genotype[j] <- "INS-INS"
+          }
+          
+        } else if (param_name != "A1298C") {
+          
+          if (tm_j > tm) {
+            result_tb_list_12[[i]]$genotype[j] <- "Wild Type"
+          } else if (tm_j < tm) {
+            result_tb_list_12[[i]]$genotype[j] <- "Homozygous Mutant"
+          }
+          
+        } else {  # A1298C: inverted rule
+          
+          if (tm_j > tm) {
+            result_tb_list_12[[i]]$genotype[j] <- "Homozygous Mutant"
+          } else if (tm_j < tm) {
+            result_tb_list_12[[i]]$genotype[j] <- "Wild Type"
+          }
+          
+        }
       }
+      
+      
       
     }
   } else {
@@ -763,7 +998,20 @@ cvd_all_in_one__v2 <- function(input_dir){
         result_table_apoe <- data.frame()
         next
       }
-      result_table_apoe <- data.frame(row.names = colnames(data_list_apoe[[i]])[2:ncol(data_list_apoe[[i]])], min_dips = c(2:ncol(data_list_apoe[[i]])), max_dips = c(2:ncol(data_list_apoe[[i]])), peak_1 = c(2:ncol(data_list_apoe[[i]])), peak_2 = c(2:ncol(data_list_apoe[[i]])), Tm = c(2:ncol(data_list_apoe[[i]])), patient = c(2:ncol(data_list_apoe[[i]])), genotype = c(2:ncol(data_list_apoe[[i]])))
+      n_apoe <- ncol(data_list_apoe[[i]]) - 1L
+      
+      result_table_apoe <- data.frame(
+        row.names = colnames(data_list_apoe[[i]])[2:ncol(data_list_apoe[[i]])],
+        min_dips  = rep(NA_real_,      n_apoe),
+        max_dips  = rep(NA_real_,      n_apoe),
+        peak_1    = rep(NA_real_,      n_apoe),
+        peak_2    = rep(NA_real_,      n_apoe),
+        Tm        = rep(NA_real_,      n_apoe),
+        patient   = rep(NA_character_, n_apoe),
+        genotype  = rep(NA_character_, n_apoe),
+        stringsAsFactors = FALSE
+      )
+      
       result_tb_list_apoe <- c(result_tb_list_apoe, list(result_table_apoe))
       result_tb_names_apoe <- c(result_tb_names_apoe, names(well_list_apoe[i]))
     }
@@ -827,6 +1075,8 @@ cvd_all_in_one__v2 <- function(input_dir){
     }
     for (i in 1:length(result_tb_list_apoe)) {
       tm <- mean(melt_for_apoe[names(result_tb_list_apoe[i])])
+      
+      # ---- FIRST inner loop (unchanged): peak_1 / peak_2 / Tm / "Heterozygous" ----
       for (j in 1:nrow(result_tb_list_apoe[[i]])) {
         if ("NTC" %in% well_info$Content[which(well_info$Well %in% rownames(result_tb_list_apoe[[i]])[j])]) {
           result_tb_list_apoe[[i]]$genotype[j] <- "NTC"
@@ -841,32 +1091,63 @@ cvd_all_in_one__v2 <- function(input_dir){
           next
         }
         if (is.na(result_tb_list_apoe[[i]]$peak_2[j])) {
-          result_tb_list_apoe[[i]]$Tm[j] <- data_list_apoe[[names(result_tb_list_apoe[i])]][which(data_list_apoe[[names(result_tb_list_apoe[i])]][,j+1] %in% result_tb_list_apoe[[i]]$peak_1),1]
+          result_tb_list_apoe[[i]]$Tm[j] <- data_list_apoe[[names(result_tb_list_apoe[i])]][
+            which(data_list_apoe[[names(result_tb_list_apoe[i])]][, j+1] %in% result_tb_list_apoe[[i]]$peak_1), 1
+          ]
         } else {
           result_tb_list_apoe[[i]]$genotype[j] <- "Heterozygous"
         }
       }
+      
+      # ---- SECOND inner loop (NEW ORDER) ----
       for (j in 1:nrow(result_tb_list_apoe[[i]])) {
-        if (is.na(result_tb_list_apoe[[i]]$Tm[j])) {
-          result_tb_list_apoe[[i]]$genotype[j] <- NA
-        } else if ("NTC" %in% well_info$Content[which(well_info$Well %in% rownames(result_tb_list_apoe[[i]])[j])]){
+        well_j     <- rownames(result_tb_list_apoe[[i]])[j]
+        tm_j       <- result_tb_list_apoe[[i]]$Tm[j]
+        g_j        <- result_tb_list_apoe[[i]]$genotype[j]
+        param_name <- names(result_tb_list_apoe)[i]   # "APOE1" or "APOE2"
+        
+        ## 1) Controls override everything
+        if ("NTC" %in% well_info$Content[which(well_info$Well %in% well_j)]) {
           result_tb_list_apoe[[i]]$genotype[j] <- "NTC"
-        } else if("Pos Ctrl" %in% well_info$Content[which(well_info$Well %in% rownames(result_tb_list_apoe[[i]])[j])]){
+          next
+        }
+        if ("Pos Ctrl" %in% well_info$Content[which(well_info$Well %in% well_j)]) {
           result_tb_list_apoe[[i]]$genotype[j] <- "Pos Ctrl"
-        } else if ( result_tb_list_apoe[[i]]$genotype[j] == "Heterozygous"){
-          result_tb_list_apoe[[i]]$genotype[j] <- "Heterozygous"
-        } else if (result_tb_list_apoe[[i]]$Tm[j] > tm && names(result_tb_list_apoe[i]) != "APOE1"){
-          result_tb_list_apoe[[i]]$genotype[j] <- "Wild Type"
-        } else if (result_tb_list_apoe[[i]]$Tm[j] < tm && names(result_tb_list_apoe[i]) != "APOE1"){
-          result_tb_list_apoe[[i]]$genotype[j] <- "Homozygous Mutant"
-        } else if (result_tb_list_apoe[[i]]$Tm[j] > tm && names(result_tb_list_apoe[i]) == "APOE1"){
-          result_tb_list_apoe[[i]]$genotype[j] <- "Homozygous Mutant"
-        } else if (result_tb_list_apoe[[i]]$Tm[j] < tm && names(result_tb_list_apoe[i]) == "APOE1"){
-          result_tb_list_apoe[[i]]$genotype[j] <- "Wild Type"
+          next
         }
         
+        ## 2) Heterozygous from the first loop: keep it (Tm may be NA by design)
+        if (!is.na(g_j) && g_j == "Heterozygous") {
+          # nothing else to do; this is a true double-peak sample
+          result_tb_list_apoe[[i]]$genotype[j] <- "Heterozygous"
+          next
+        }
+        
+        ## 3) True "no peaks": Tm NA and not a control / heterozygote
+        if (is.na(tm_j)) {
+          result_tb_list_apoe[[i]]$genotype[j] <- NA  # or your preferred text
+          next
+        }
+        
+        ## 4) Single-peak Tm-based calls
+        if (param_name != "APOE1") {
+          # APOE2 channel
+          if (tm_j > tm) {
+            result_tb_list_apoe[[i]]$genotype[j] <- "Wild Type"
+          } else if (tm_j < tm) {
+            result_tb_list_apoe[[i]]$genotype[j] <- "Homozygous Mutant"
+          }
+        } else {
+          # APOE1 channel: inverted rule
+          if (tm_j > tm) {
+            result_tb_list_apoe[[i]]$genotype[j] <- "Homozygous Mutant"
+          } else if (tm_j < tm) {
+            result_tb_list_apoe[[i]]$genotype[j] <- "Wild Type"
+          }
+        }
       }
     }
+    
     apoe1_table <- result_tb_list_apoe[[1]]
     apoe1_table$Parameter <- "APOE1"
     apoe1_table <- cbind(Well = rownames(apoe1_table), apoe1_table)

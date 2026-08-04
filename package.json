@@ -1,6 +1,6 @@
 {
   "name": "octoclario",
-  "version": "1.1.2",
+  "version": "1.1.5",
   "description": "OctoClario: Native R Shiny Desktop App",
   "author": "Onurcan Sezginer",
   "main": "main.js",
@@ -19,7 +19,8 @@
       "!node_modules/*/{test,__tests__}/**",
       "!R-portable/**",
       "!shiny-app/**",
-      "!run-shiny.R"
+      "!run-shiny.R",
+      "!logo.png"
     ],
     "extraResources": [
       {
@@ -37,10 +38,15 @@
       {
         "from": "jre/",
         "to": "jre/"
+      },
+      {
+        "from": "logo.png",
+        "to": "logo.png"
       }
     ],
     "win": {
       "target": "nsis",
+      "artifactName": "OctoClario-Setup.${ext}",
       "icon": "build/icon.ico"
     },
     "nsis": {
